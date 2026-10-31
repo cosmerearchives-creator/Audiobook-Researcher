@@ -14,8 +14,10 @@ The first local-player iteration includes:
 - Timestamped notes for each audiobook, saved locally across updates.
 - Add notes by typing or using Android speech dictation (where a recognizer is available).
 - Jump to the note timestamp with a 15-second context rewind.
+- Record an original AAC/M4A voice note into app-private storage, linked to the current book and timestamp.
+- Auto-save after roughly four seconds of detected quiet following speech, or use Save note; replay the original recording from its bookmark. Microphone permission required.
 
-**Not yet implemented:** continuous voice wake word, original voice recording retention, automatic silence detection, chapter parsing, external service controls, full Bluetooth/lock-screen real-device verification. Speech dictation currently uses an external Android recognizer and may require a network connection. This player is an early foundation and will not yet continue through all background playback conditions.
+**Not yet implemented:** continuous “Hey Bookmark” wake word, spoken “Save note” recognition, transcription of retained voice audio, chapter parsing, external service controls, full Bluetooth/lock-screen real-device verification. Silence detection is amplitude-based and needs tuning on actual devices and car microphones. Speech dictation currently uses an external Android recognizer and may require a network connection. This player is an early foundation and will not yet continue through all background playback conditions.
 
 ## Building and updates
 
