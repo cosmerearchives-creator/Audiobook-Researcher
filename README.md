@@ -18,7 +18,7 @@ The first local-player iteration includes:
 - Auto-save after roughly four seconds of detected quiet following speech, or use Save note; replay the original recording from its bookmark. Microphone permission required.
 - Experimental opt-in foreground “Hey Bookmark” recognition using Android SpeechRecognizer. It pauses the book and starts an original-audio voice note. This is not a dedicated always-on wake-word engine; it stops when the app leaves the foreground and may mishear speech from the audiobook itself.
 
-**Not yet implemented:** reliable screen-off/background “Hey Bookmark” wake word, spoken “Save note” recognition during audio recording, transcription of retained voice audio, chapter parsing, external service controls, full Bluetooth/lock-screen real-device verification. Silence detection is amplitude-based and needs tuning on actual devices and car microphones. Speech dictation currently uses an external Android recognizer and may require a network connection. This player is an early foundation and will not yet continue through all background playback conditions.
+**Not yet implemented:** reliably verified screen-off/background “Hey Bookmark” detection, spoken “Save note” recognition during audio recording, transcription of retained voice audio, chapter parsing, external service controls, full Bluetooth/lock-screen real-device verification. Silence detection is amplitude-based and needs tuning on actual devices and car microphones. Speech dictation currently uses an external Android recognizer and may require a network connection. This player is an early foundation and will not yet continue through all background playback conditions.
 
 ## Building and updates
 
@@ -37,3 +37,9 @@ The app checks GitHub's latest Release on launch and on demand and downloads an 
 ## Important voice activation limitations
 
 The new voice activation mode is an **experimental foreground-only** recognizer session. Enable it while the app is visible and a book is playing. It is disabled on app pause; no claim of lock-screen wake-word support is made. Android recognizers are session-based and may stop or hear audiobook speech instead of the user. This mode cannot run simultaneously with the M4A recorder; the spoken Save note command and automatic transcription of retained audio remain unfinished. Do not rely on this feature while driving until validated hands-free on an actual device.
+
+## Experimental background hands-free mode
+
+The player now offers **Start hands-free mode (experimental)**. It starts a foreground service while the screen is visible, after microphone permission is granted. A persistent microphone notification has a Stop listening action. Android's speech recognizer listens in repeating sessions for “Hey Bookmark”. On recognition, the service pauses the active local audiobook, records and saves an M4A file tagged to its playback position after roughly four seconds of detected quiet, and resumes playback. Notes are persisted to the same library preferences and will appear in the bookmark list when the app view is refreshed.
+
+This is an experimental integration, **not** a promise of reliable hands-free operation while driving or with Bluetooth. Android speech recognition sessions may stop in the background, may use a network service, and can be disrupted by audiobook narration or audio routing. Microphone foreground service must be initiated while the app is visible on recent Android versions. The wake phrase is not an offline dedicated wake-word detector, and voice-note transcription and a spoken Save note command remain future work.
