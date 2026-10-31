@@ -43,6 +43,15 @@ public class MainActivity extends Activity {
     private final java.util.ArrayList<Book> books = new java.util.ArrayList<>();
     private SharedPreferences prefs;
     private MediaPlayer player;
+    private PlaybackService playback;
+    private boolean bound;
+    private final android.content.ServiceConnection serviceConnection=new android.content.ServiceConnection(){
+        @Override public void onServiceConnected(android.content.ComponentName name,android.os.IBinder binder){
+            playback=((PlaybackService.LocalBinder)binder).service();bound=true;
+            if(playback.player!=null){player=playback.player;for(Book book:books)if(book.uri.equals(playback.uri)){active=book;break;}render();}
+        }
+        @Override public void onServiceDisconnected(android.content.ComponentName name){bound=false;playback=null;player=null;}
+    };
     private Book active;
     private TextView status, progress, playButton, currentBook;
     private ProgressBar updateProgress;
@@ -70,6 +79,7 @@ public class MainActivity extends Activity {
         restoreBooks();
         restoreNotes();
         render();
+        bindService(new Intent(this,PlaybackService.class),serviceConnection,BIND_AUTO_CREATE);
         handler.postDelayed(ticker, 1000);
     }
 
@@ -238,7 +248,7 @@ public class MainActivity extends Activity {
         pendingBookUri=active.uri;
         pendingPosition=player.getCurrentPosition();
         resumeAfterNote=player.isPlaying();
-        if(resumeAfterNote)player.pause();
+        if(resumeAfterNote){if(playback!=null)playback.pause();else player.pause();}
         if(playButton!=null)playButton.setText("Play");
         String[] choices={"Dictate note","Type note","Cancel"};
         new android.app.AlertDialog.Builder(this)
@@ -283,7 +293,7 @@ public class MainActivity extends Activity {
     }
     private void resumeAfterCapture() {
         if(resumeAfterNote && player!=null) {
-            player.start();
+            if(playback!=null)playback.play();else player.start();
             if(playButton!=null)playButton.setText("Pause");
         }
         resumeAfterNote=false;
@@ -310,29 +320,26 @@ public class MainActivity extends Activity {
     }
     private void toggle() {
         if(player==null)return;
-        if(player.isPlaying())player.pause();else player.start();
+        if(playback!=null)playback.toggle();else if(player.isPlaying())player.pause();else player.start();
         playButton.setText(player.isPlaying()?"Pause":"Play");saveBooks();
     }
     private void seekTo(int requested) {
         if(player==null)return;
         int position=Math.max(0,Math.min(requested,player.getDuration()));
-        player.seekTo(position); active.position=position;saveBooks();
+        if(playback!=null)playback.seek(position);else player.seekTo(position); active.position=position;saveBooks();
     }
     private void openBook(Book book) {
-        if(player!=null){player.release();player=null;}
         active=book;
+        if(playback==null) {
+            new android.app.AlertDialog.Builder(this).setMessage("Player is initializing. Please try again.").setPositiveButton("OK",null).show();
+            return;
+        }
         try {
-            player=new MediaPlayer();
-            player.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build());
-            player.setDataSource(this,Uri.parse(book.uri));
-            player.prepare();
-            player.seekTo(Math.min(book.position,player.getDuration()));
-            player.setOnCompletionListener(mp->{book.position=0;saveBooks(); if(playButton!=null)playButton.setText("Play");});
-            player.start();
+            if(playback.player!=null && book.uri.equals(playback.uri)) playback.play();
+            else playback.open(book.uri,book.title,book.position);
+            player=playback.player;
             render();
-        } catch(Exception ex) {
-            if(player!=null){player.release();player=null;}
-            active=null;
+        }catch(Exception ex){
             new android.app.AlertDialog.Builder(this).setTitle("Unable to open audiobook").setMessage(ex.getMessage()).setPositiveButton("OK",null).show();
         }
     }
@@ -378,5 +385,5 @@ public class MainActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();if(updater!=null)updater.onResume();}
     @Override protected void onPause(){super.onPause();saveBooks();}
-    @Override protected void onDestroy(){if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(player!=null)player.release();super.onDestroy();}
+    @Override protected void onDestroy(){if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
 }
