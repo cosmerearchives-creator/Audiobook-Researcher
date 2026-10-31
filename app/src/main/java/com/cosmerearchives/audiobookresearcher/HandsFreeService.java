@@ -51,6 +51,7 @@ public class HandsFreeService extends Service {
                 stopSelf();return START_NOT_STICKY;
             }
             enabled=true;
+            getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",true).apply();
             showNotification("Listening for Hey Bookmark");
             listen();
         }
@@ -161,7 +162,9 @@ public class HandsFreeService extends Service {
         }
     }
     private void shutdown(){
-        enabled=false;handler.removeCallbacks(restart);handler.removeCallbacks(monitor);
+        enabled=false;
+        getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",false).apply();
+        handler.removeCallbacks(restart);handler.removeCallbacks(monitor);
         if(recognizer!=null){recognizer.destroy();recognizer=null;}
         listening=false;
         if(recording)finishNote(false);
