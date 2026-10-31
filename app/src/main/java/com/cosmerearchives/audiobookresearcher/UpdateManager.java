@@ -62,12 +62,7 @@ final class UpdateManager {
                 }
                 if (assetUrl == null) throw new IllegalStateException("Update APK missing from release");
                 String url = assetUrl;
-                main.post(() -> new AlertDialog.Builder(activity)
-                        .setTitle("Update available: " + tag)
-                        .setMessage("Download the update now? Android may ask for permission before installation.")
-                        .setNegativeButton("Later", (d, w) -> status.setText("Update available: " + tag))
-                        .setPositiveButton("Download", (d, w) -> download(url))
-                        .show());
+                main.post(() -> download(url));
             } catch (Exception ex) {
                 main.post(() -> status.setText("Update check unavailable: " + ex.getMessage()));
             } finally { if (connection != null) connection.disconnect(); }
@@ -87,6 +82,11 @@ final class UpdateManager {
     }
 
     private void download(String url) {
+        java.io.File oldApk = new java.io.File(activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), APK);
+        if (oldApk.exists() && !oldApk.delete()) {
+            status.setText("Could not replace previous update download.");
+            return;
+        }
         DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
         request.setTitle("Audiobook Researcher update");
         request.setDescription("Signed app update");
