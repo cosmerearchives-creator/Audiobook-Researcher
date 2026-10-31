@@ -16,8 +16,9 @@ The first local-player iteration includes:
 - Jump to the note timestamp with a 15-second context rewind.
 - Record an original AAC/M4A voice note into app-private storage, linked to the current book and timestamp.
 - Auto-save after roughly four seconds of detected quiet following speech, or use Save note; replay the original recording from its bookmark. Microphone permission required.
+- Experimental opt-in foreground “Hey Bookmark” recognition using Android SpeechRecognizer. It pauses the book and starts an original-audio voice note. This is not a dedicated always-on wake-word engine; it stops when the app leaves the foreground and may mishear speech from the audiobook itself.
 
-**Not yet implemented:** continuous “Hey Bookmark” wake word, spoken “Save note” recognition, transcription of retained voice audio, chapter parsing, external service controls, full Bluetooth/lock-screen real-device verification. Silence detection is amplitude-based and needs tuning on actual devices and car microphones. Speech dictation currently uses an external Android recognizer and may require a network connection. This player is an early foundation and will not yet continue through all background playback conditions.
+**Not yet implemented:** reliable screen-off/background “Hey Bookmark” wake word, spoken “Save note” recognition during audio recording, transcription of retained voice audio, chapter parsing, external service controls, full Bluetooth/lock-screen real-device verification. Silence detection is amplitude-based and needs tuning on actual devices and car microphones. Speech dictation currently uses an external Android recognizer and may require a network connection. This player is an early foundation and will not yet continue through all background playback conditions.
 
 ## Building and updates
 
@@ -32,3 +33,7 @@ The app checks GitHub's latest Release on launch and on demand and downloads an 
 ## Voice-note defaults for subsequent development
 
 "Hey Bookmark" activation; record and transcribe; stop using "Save note" or four seconds of silence; keep original audio; say "Note saved"; and jump back 15 seconds when reopening bookmarks.
+
+## Important voice activation limitations
+
+The new voice activation mode is an **experimental foreground-only** recognizer session. Enable it while the app is visible and a book is playing. It is disabled on app pause; no claim of lock-screen wake-word support is made. Android recognizers are session-based and may stop or hear audiobook speech instead of the user. This mode cannot run simultaneously with the M4A recorder; the spoken Save note command and automatic transcription of retained audio remain unfinished. Do not rely on this feature while driving until validated hands-free on an actual device.
