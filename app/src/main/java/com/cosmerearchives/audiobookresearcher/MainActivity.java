@@ -326,7 +326,7 @@ public class MainActivity extends Activity {
                     wakeRunning=false;
                     ArrayList<String> choices=result.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                     if(choices!=null)for(String candidate:choices){
-                        if(candidate.toLowerCase(java.util.Locale.ROOT).contains("hey bookmark")){
+                        if(java.util.Arrays.asList(candidate.toLowerCase(java.util.Locale.ROOT).split("[^a-z]+")).contains("bookmark")){
                             stopWake();
                             beginVoiceBookmark();
                             return;
