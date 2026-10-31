@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -44,6 +45,8 @@ public class MainActivity extends Activity {
     private MediaPlayer player;
     private Book active;
     private TextView status, progress, playButton, currentBook;
+    private ProgressBar updateProgress;
+    private TextView updateDetails, installUpdate;
     private SeekBar seek;
     private boolean tracking;
     private UpdateManager updater;
@@ -209,10 +212,23 @@ public class MainActivity extends Activity {
         space(root,18);
         TextView updaterTitle = text("App updates",20,true); root.addView(updaterTitle);
         space(root,9);
-        status=text("Checking for new versions…",14,false); root.addView(status);
+        status=text("Checking for new versions…",14,true); root.addView(status);
+        space(root,8);
+        updateProgress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+        updateProgress.setProgressTintList(ColorStateList.valueOf(PURPLE));
+        updateProgress.setIndeterminateTintList(ColorStateList.valueOf(PURPLE));
+        updateProgress.setVisibility(View.GONE);
+        root.addView(updateProgress,new LinearLayout.LayoutParams(-1,dp(8)));
+        space(root,8);
+        updateDetails=text("",13,false);
+        updateDetails.setTextColor(0xFF807D77);root.addView(updateDetails);
+        space(root,10);
+        installUpdate=button("Install downloaded update",true);
+        installUpdate.setVisibility(View.GONE);root.addView(installUpdate);
         space(root,10);
         TextView updateButton=button("Check for updates",false); root.addView(updateButton);
-        updater=new UpdateManager(this,status);
+        if(updater!=null)updater.onDestroy();
+        updater=new UpdateManager(this,status,updateProgress,updateDetails,installUpdate);
         updateButton.setOnClickListener(v->updater.check());
         updater.check();
         setContentView(scroll);
@@ -362,5 +378,5 @@ public class MainActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();if(updater!=null)updater.onResume();}
     @Override protected void onPause(){super.onPause();saveBooks();}
-    @Override protected void onDestroy(){handler.removeCallbacks(ticker);if(player!=null)player.release();super.onDestroy();}
+    @Override protected void onDestroy(){if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(player!=null)player.release();super.onDestroy();}
 }
