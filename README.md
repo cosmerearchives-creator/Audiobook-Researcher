@@ -10,8 +10,11 @@ The first local-player iteration includes:
 - A basic player with play/pause, seek, 15-second rewind, and 30-second skip.
 - A light neutral background, white rounded cards, and muted purple controls.
 - The built-in GitHub Release updater from the initial foundation.
+- Timestamped notes for each audiobook, saved locally across updates.
+- Add notes by typing or using Android speech dictation (where a recognizer is available).
+- Jump to the note timestamp with a 15-second context rewind.
 
-**Not yet implemented:** voice notes, speech transcription, chapter parsing, external service controls, background media service, Bluetooth/lock-screen controls. This player is an early foundation and will not yet continue through all background playback conditions.
+**Not yet implemented:** continuous voice wake word, original voice recording retention, automatic silence detection, chapter parsing, external service controls, background media service, Bluetooth/lock-screen controls. Speech dictation currently uses an external Android recognizer and may require a network connection. This player is an early foundation and will not yet continue through all background playback conditions.
 
 ## Building and updates
 
