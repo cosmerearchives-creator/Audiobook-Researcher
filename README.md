@@ -34,3 +34,7 @@ Status: **not device-tested**. Do not treat v1.0 as finished until the above end
 ## Planned app features
 
 Local MP3/M4B player, chapter support, notes triggered by “Hey Bookmark,” speech-to-text, retention of original voice audio, finish via “Save note” or 4 seconds of silence, spoken confirmation, 15-second context rewind, and best-effort external player integration.
+
+## Signing verification
+
+After configuring the four repository secrets, run the **Android build and signed updates** workflow from the GitHub Actions tab (or push a change to `main`). Confirm a signed `audiobook-researcher.apk` appears in Releases before installing. Setting secrets alone does not rerun an earlier workflow.
