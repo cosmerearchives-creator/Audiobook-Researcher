@@ -20,6 +20,8 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
+import android.speech.RecognitionListener;
 import android.media.MediaRecorder;
 import android.Manifest;
 import android.content.pm.PackageManager;
@@ -39,6 +41,12 @@ public class MainActivity extends Activity {
     private static final int PICK_AUDIO = 200;
     private static final int DICTATE_NOTE = 201;
     private static final int MIC_PERMISSION = 202;
+    private static final int WAKE_PERMISSION = 203;
+    private SpeechRecognizer wakeRecognizer;
+    private boolean wakeEnabled=false;
+    private boolean wakeRunning=false;
+    private TextView wakeToggle;
+    private final Runnable restartWake=()->listenForWake();
     private MediaRecorder recorder;
     private File recordingFile;
     private long lastVoice, recordingStarted;
@@ -210,6 +218,13 @@ public class MainActivity extends Activity {
             TextView noteButton=button("+ Add bookmarked note",true);
             root.addView(noteButton);
             noteButton.setOnClickListener(v -> startNote());
+            space(root,10);
+            wakeToggle=button(wakeEnabled?"Stop voice activation (experimental)":"Enable voice activation (experimental)",false);
+            root.addView(wakeToggle);
+            wakeToggle.setOnClickListener(v->{
+                if(wakeEnabled){stopWake();wakeToggle.setText("Enable voice activation (experimental)");}
+                else startWake();
+            });
             space(root,18);
         }
         TextView notesHeading=text("Bookmarked notes",21,true);root.addView(notesHeading);
@@ -266,8 +281,73 @@ public class MainActivity extends Activity {
         updater.check();
         setContentView(scroll);
     }
+    private void startWake(){
+        if(active==null || player==null)return;
+        if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},WAKE_PERMISSION);return;
+        }
+        if(!SpeechRecognizer.isRecognitionAvailable(this)){
+            new android.app.AlertDialog.Builder(this).setMessage("This device has no available Android speech recognizer.").setPositiveButton("OK",null).show();return;
+        }
+        wakeEnabled=true;
+        if(wakeToggle!=null)wakeToggle.setText("Stop voice activation (experimental)");
+        if(wakeRecognizer==null){
+            wakeRecognizer=SpeechRecognizer.createSpeechRecognizer(this);
+            wakeRecognizer.setRecognitionListener(new RecognitionListener(){
+                @Override public void onReadyForSpeech(Bundle params){}
+                @Override public void onBeginningOfSpeech(){}
+                @Override public void onRmsChanged(float rms){}
+                @Override public void onBufferReceived(byte[] buffer){}
+                @Override public void onEndOfSpeech(){}
+                @Override public void onError(int error){wakeRunning=false; if(error==SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS){stopWake();return;}restartWakeSoon();}
+                @Override public void onResults(Bundle result){
+                    wakeRunning=false;
+                    ArrayList<String> choices=result.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if(choices!=null)for(String candidate:choices){
+                        if(candidate.toLowerCase(java.util.Locale.ROOT).contains("hey bookmark")){
+                            stopWake();
+                            beginVoiceBookmark();
+                            return;
+                        }
+                    }
+                    restartWakeSoon();
+                }
+                @Override public void onPartialResults(Bundle partial){}
+                @Override public void onEvent(int eventType,Bundle params){}
+            });
+        }
+        listenForWake();
+    }
+    private void listenForWake(){
+        if(!wakeEnabled || wakeRecognizer==null || wakeRunning || recording)return;
+        wakeRunning=true;
+        Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS,true);
+        try{wakeRecognizer.startListening(intent);}catch(Exception ex){wakeRunning=false;restartWakeSoon();}
+    }
+    private void restartWakeSoon(){
+        handler.removeCallbacks(restartWake);
+        if(wakeEnabled)handler.postDelayed(restartWake,1200);
+    }
+    private void stopWake(){
+        wakeEnabled=false;wakeRunning=false;
+        handler.removeCallbacks(restartWake);
+        if(wakeRecognizer!=null){wakeRecognizer.destroy();wakeRecognizer=null;}
+        if(wakeToggle!=null)wakeToggle.setText("Enable voice activation (experimental)");
+    }
+    private void beginVoiceBookmark(){
+        if(active==null || player==null)return;
+        pendingBookUri=active.uri;
+        pendingPosition=player.getCurrentPosition();
+        resumeAfterNote=player.isPlaying();
+        if(resumeAfterNote){if(playback!=null)playback.pause();else player.pause();}
+        if(playButton!=null)playButton.setText("Play");
+        beginRecording();
+    }
     private void startNote() {
         if(active==null||player==null)return;
+        if(wakeEnabled)stopWake();
         pendingBookUri=active.uri;
         pendingPosition=player.getCurrentPosition();
         resumeAfterNote=player.isPlaying();
@@ -354,6 +434,9 @@ public class MainActivity extends Activity {
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
         super.onRequestPermissionsResult(request,permissions,results);
+        if(request==WAKE_PERMISSION){
+            if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)startWake();
+        }
         if(request==MIC_PERMISSION){
             if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)beginRecording();
             else resumeAfterCapture();
@@ -485,6 +568,6 @@ public class MainActivity extends Activity {
         prefs.edit().putString("books",items.toString()).apply();
     }
     @Override protected void onResume(){super.onResume();if(updater!=null)updater.onResume();}
-    @Override protected void onPause(){super.onPause();saveBooks();}
-    @Override protected void onDestroy(){if(recording)finishRecording(false);if(tts!=null)tts.shutdown();if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
+    @Override protected void onPause(){stopWake();super.onPause();saveBooks();}
+    @Override protected void onDestroy(){stopWake();if(recording)finishRecording(false);if(tts!=null)tts.shutdown();if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
 }
