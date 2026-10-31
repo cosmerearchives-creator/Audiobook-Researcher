@@ -42,6 +42,7 @@ public class MainActivity extends Activity {
     private static final int DICTATE_NOTE = 201;
     private static final int MIC_PERMISSION = 202;
     private static final int WAKE_PERMISSION = 203;
+    private boolean backgroundHandsFree;
     private SpeechRecognizer wakeRecognizer;
     private boolean wakeEnabled=false;
     private boolean wakeRunning=false;
@@ -102,6 +103,7 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("library", MODE_PRIVATE);
         restoreBooks();
         restoreNotes();
+        backgroundHandsFree=prefs.getBoolean("backgroundHandsFree",false);
         tts=new TextToSpeech(this,result->{});
         render();
         bindService(new Intent(this,PlaybackService.class),serviceConnection,BIND_AUTO_CREATE);
@@ -219,11 +221,15 @@ public class MainActivity extends Activity {
             root.addView(noteButton);
             noteButton.setOnClickListener(v -> startNote());
             space(root,10);
-            wakeToggle=button(wakeEnabled?"Stop voice activation (experimental)":"Enable voice activation (experimental)",false);
+            wakeToggle=button(backgroundHandsFree?"Stop hands-free mode":"Start hands-free mode (experimental)",false);
             root.addView(wakeToggle);
             wakeToggle.setOnClickListener(v->{
-                if(wakeEnabled){stopWake();wakeToggle.setText("Enable voice activation (experimental)");}
-                else startWake();
+                if(backgroundHandsFree){
+                    stopService(new Intent(this,HandsFreeService.class));
+                    backgroundHandsFree=false;
+                    prefs.edit().putBoolean("backgroundHandsFree",false).apply();
+                    wakeToggle.setText("Start hands-free mode (experimental)");
+                } else startBackgroundHandsFree();
             });
             space(root,18);
         }
@@ -280,6 +286,22 @@ public class MainActivity extends Activity {
         updateButton.setOnClickListener(v->updater.check());
         updater.check();
         setContentView(scroll);
+    }
+    private void startBackgroundHandsFree(){
+        if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},WAKE_PERMISSION);return;
+        }
+        if(!SpeechRecognizer.isRecognitionAvailable(this)){
+            new android.app.AlertDialog.Builder(this).setMessage("No speech recognition service is installed.").setPositiveButton("OK",null).show();return;
+        }
+        try{
+            startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));
+            backgroundHandsFree=true;
+            prefs.edit().putBoolean("backgroundHandsFree",true).apply();
+            if(wakeToggle!=null)wakeToggle.setText("Stop hands-free mode");
+        }catch(Exception e){
+            new android.app.AlertDialog.Builder(this).setMessage("Unable to start hands-free mode: "+e.getMessage()).setPositiveButton("OK",null).show();
+        }
     }
     private void startWake(){
         if(active==null || player==null)return;
@@ -435,7 +457,7 @@ public class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
         super.onRequestPermissionsResult(request,permissions,results);
         if(request==WAKE_PERMISSION){
-            if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)startWake();
+            if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)startBackgroundHandsFree();
         }
         if(request==MIC_PERMISSION){
             if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)beginRecording();
@@ -567,7 +589,7 @@ public class MainActivity extends Activity {
         }catch(Exception ignored){}items.put(item);}
         prefs.edit().putString("books",items.toString()).apply();
     }
-    @Override protected void onResume(){super.onResume();if(updater!=null)updater.onResume();}
+    @Override protected void onResume(){super.onResume();if(updater!=null)updater.onResume();if(prefs!=null){notes.clear();restoreNotes();}}
     @Override protected void onPause(){stopWake();super.onPause();saveBooks();}
     @Override protected void onDestroy(){stopWake();if(recording)finishRecording(false);if(tts!=null)tts.shutdown();if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
 }
