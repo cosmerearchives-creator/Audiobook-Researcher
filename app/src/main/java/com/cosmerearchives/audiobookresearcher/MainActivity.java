@@ -335,6 +335,7 @@ public class MainActivity extends Activity {
             return;
         }
         try {
+            startService(new Intent(this,PlaybackService.class));
             if(playback.player!=null && book.uri.equals(playback.uri)) playback.play();
             else playback.open(book.uri,book.title,book.position);
             player=playback.player;
