@@ -4,6 +4,8 @@ import android.app.*;
 import android.content.*;
 import android.content.pm.ServiceInfo;
 import android.media.*;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.*;
 import android.view.KeyEvent;
