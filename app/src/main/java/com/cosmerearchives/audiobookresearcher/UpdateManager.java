@@ -31,6 +31,8 @@ final class UpdateManager {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final DownloadManager downloads;
     private long downloadId;
+    private int downloadVersionCode;
+    private boolean destroyed;
     private boolean checking;
     private boolean installing;
     private String version = "";
@@ -47,6 +49,8 @@ final class UpdateManager {
         this.details=details; this.installButton=installButton;
         downloads=(DownloadManager)activity.getSystemService(Context.DOWNLOAD_SERVICE);
         downloadId=activity.getPreferences(0).getLong("downloadId",-1);
+        downloadVersionCode=activity.getPreferences(0).getInt("downloadVersionCode",-1);
+        discardObsoleteDownload();
         installButton.setOnClickListener(v->install());
         installButton.setVisibility(View.GONE);
         if(downloadId>=0) {
@@ -56,6 +60,7 @@ final class UpdateManager {
     }
 
     void check() {
+        discardObsoleteDownload();
         if (downloadId>=0) { startPolling(); return; }
         if (checking) return;
         checking=true;
@@ -77,11 +82,10 @@ final class UpdateManager {
                 JSONObject release=new JSONObject(new String(bytes,java.nio.charset.StandardCharsets.UTF_8));
                 String tag=release.getString("tag_name");
                 int remote=parseVersion(tag);
-                int installed=Build.VERSION.SDK_INT>=28
-                        ? (int)activity.getPackageManager().getPackageInfo(activity.getPackageName(),0).getLongVersionCode()
-                        : activity.getPackageManager().getPackageInfo(activity.getPackageName(),0).versionCode;
+                int installed=installedCode();
                 if(remote<=installed) {
                     handler.post(()->{
+                        if(destroyed)return;
                         checking=false; progress.setVisibility(View.GONE);
                         status.setText("Up to date");
                         details.setText("Installed version: "+tag);
@@ -95,9 +99,10 @@ final class UpdateManager {
                 }
                 if(url==null) throw new IllegalStateException("No APK attached to the latest release");
                 String finalUrl=url;
-                handler.post(()->{checking=false;version=tag;download(finalUrl);});
+                handler.post(()->{if(destroyed)return;checking=false;version=tag;download(finalUrl,remote);});
             }catch(Exception ex) {
                 handler.post(()->{
+                    if(destroyed)return;
                     checking=false;progress.setVisibility(View.GONE);
                     status.setText("Unable to check for updates");
                     details.setText(ex.getMessage());
@@ -116,7 +121,25 @@ final class UpdateManager {
         while((n=stream.read(bytes))!=-1)out.write(bytes,0,n);
         return out.toByteArray();
     }
-    private void download(String url) {
+    private int installedCode() {
+        try {
+            return Build.VERSION.SDK_INT>=28
+                ? (int)activity.getPackageManager().getPackageInfo(activity.getPackageName(),0).getLongVersionCode()
+                : activity.getPackageManager().getPackageInfo(activity.getPackageName(),0).versionCode;
+        }catch(Exception e){return -1;}
+    }
+    private void discardObsoleteDownload(){
+        if(downloadId<0)return;
+        int installed=installedCode();
+        if(installed>=0 && (downloadVersionCode<0 || installed>=downloadVersionCode)){
+            clearDownload();
+            status.setText("Installed version is current");
+            details.setText("Installed build: "+installed+". Checking GitHub for newer releases.");
+            progress.setVisibility(View.GONE);
+            installButton.setVisibility(View.GONE);
+        }
+    }
+    private void download(String url,int remoteCode) {
         java.io.File target=new java.io.File(activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),APK);
         if(target.exists()&&!target.delete()){
             status.setText("Update download couldn't start");
@@ -132,7 +155,8 @@ final class UpdateManager {
         request.setDestinationInExternalFilesDir(activity,Environment.DIRECTORY_DOWNLOADS,APK);
         try {
             downloadId=downloads.enqueue(request);
-            activity.getPreferences(0).edit().putLong("downloadId",downloadId).apply();
+            downloadVersionCode=remoteCode;
+            activity.getPreferences(0).edit().putLong("downloadId",downloadId).putInt("downloadVersionCode",remoteCode).apply();
             status.setText("Downloading update "+version);
             progress.setVisibility(View.VISIBLE);
             progress.setIndeterminate(true);
@@ -149,6 +173,7 @@ final class UpdateManager {
         if(downloadId>=0)handler.postDelayed(poll,700);
     }
     private void updateDownloadState() {
+        discardObsoleteDownload();
         if(downloadId<0)return;
         try(Cursor cursor=downloads.query(new DownloadManager.Query().setFilterById(downloadId))) {
             if(cursor==null||!cursor.moveToFirst()){
@@ -163,7 +188,9 @@ final class UpdateManager {
             long total=cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
             if(state==DownloadManager.STATUS_SUCCESSFUL) {
                 status.setText("Update downloaded — ready to install");
-                details.setText(size(downloaded)+" downloaded. Android will ask you to confirm installation.");
+                java.io.File savedApk=new java.io.File(activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),APK);
+                long actualBytes=savedApk.exists()?savedApk.length():Math.max(downloaded,total);
+                details.setText(size(actualBytes)+" downloaded. Android will ask you to confirm installation.");
                 progress.setVisibility(View.VISIBLE);
                 progress.setIndeterminate(false);progress.setMax(100);progress.setProgress(100);
                 installButton.setVisibility(View.VISIBLE);
@@ -222,9 +249,10 @@ final class UpdateManager {
     }
     private void clearDownload(){
         downloadId=-1;
-        activity.getPreferences(0).edit().remove("downloadId").apply();
+        downloadVersionCode=-1;
+        activity.getPreferences(0).edit().remove("downloadId").remove("downloadVersionCode").apply();
         handler.removeCallbacks(poll);
     }
-    void onResume(){ installing=false;if(downloadId>=0)startPolling(); }
-    void onDestroy(){handler.removeCallbacks(poll);}
+    void onResume(){ installing=false;discardObsoleteDownload();if(downloadId>=0)startPolling();else check(); }
+    void onDestroy(){destroyed=true;handler.removeCallbacks(poll);}
 }
