@@ -52,7 +52,7 @@ public class HandsFreeService extends Service {
             }
             enabled=true;
             getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",true).apply();
-            showNotification("Listening for Hey Bookmark");
+            showNotification("Listening for Bookmark");
             listen();
         }
         return START_NOT_STICKY;
@@ -92,7 +92,7 @@ public class HandsFreeService extends Service {
                     listening=false;
                     ArrayList<String> words=result.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                     if(words!=null)for(String word:words){
-                        if(word.toLowerCase(Locale.ROOT).contains("hey bookmark")){capture();return;}
+                        if(java.util.Arrays.asList(word.toLowerCase(Locale.ROOT).split("[^a-z]+")).contains("bookmark")){capture();return;}
                     }
                     scheduleRestart();
                 }
@@ -157,7 +157,7 @@ public class HandsFreeService extends Service {
         if(resume&&p!=null)p.play();
         resume=false;
         if(enabled){
-            showNotification(keep&&valid?"Bookmark saved • listening":"Listening for Hey Bookmark");
+            showNotification(keep&&valid?"Bookmark saved • listening":"Listening for Bookmark");
             scheduleRestart();
         }
     }
