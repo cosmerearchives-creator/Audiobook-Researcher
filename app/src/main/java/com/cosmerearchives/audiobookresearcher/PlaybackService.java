@@ -49,7 +49,7 @@ public class PlaybackService extends Service {
                 KeyEvent key=intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
                 if(key!=null&&key.getAction()==KeyEvent.ACTION_DOWN){
                     int code=key.getKeyCode();
-                    if(code==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE||code==KeyEvent.KEYCODE_HEADSETPHOOK){toggle();return true;}
+                    if(code==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE||code==KeyEvent.KEYCODE_HEADSETHOOK){toggle();return true;}
                 }
                 return super.onMediaButtonEvent(intent);
             }
