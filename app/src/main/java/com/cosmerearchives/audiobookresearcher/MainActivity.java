@@ -20,6 +20,12 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.speech.RecognizerIntent;
+import android.media.MediaRecorder;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.os.SystemClock;
+import android.speech.tts.TextToSpeech;
+import java.io.File;
 import java.util.ArrayList;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -32,6 +38,15 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
     private static final int PICK_AUDIO = 200;
     private static final int DICTATE_NOTE = 201;
+    private static final int MIC_PERMISSION = 202;
+    private MediaRecorder recorder;
+    private File recordingFile;
+    private long lastVoice, recordingStarted;
+    private boolean heardVoice;
+    private android.app.AlertDialog recordingDialog;
+    private TextView recordingStatus;
+    private TextToSpeech tts;
+    private boolean recording;
     private final ArrayList<Note> notes = new ArrayList<>();
     private String pendingBookUri;
     private int pendingPosition;
@@ -66,8 +81,9 @@ public class MainActivity extends Activity {
     }
 
     private static class Note {
-        String bookUri, body; int position;
-        Note(String u, String b, int p) { bookUri=u; body=b; position=p; }
+        String bookUri, body, audioPath; int position;
+        Note(String u, String b, int p) {this(u,b,p,"");}
+        Note(String u, String b, int p,String a) { bookUri=u; body=b; position=p; audioPath=a; }
     }
 
     @Override public void onCreate(Bundle state) {
@@ -78,6 +94,7 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("library", MODE_PRIVATE);
         restoreBooks();
         restoreNotes();
+        tts=new TextToSpeech(this,result->{});
         render();
         bindService(new Intent(this,PlaybackService.class),serviceConnection,BIND_AUTO_CREATE);
         handler.postDelayed(ticker, 1000);
@@ -94,6 +111,7 @@ public class MainActivity extends Activity {
                     if (player.isPlaying()) saveBooks();
                 } catch (IllegalStateException ignored) {}
             }
+            if(recording)monitorRecording();
             handler.postDelayed(this, 1000);
         }
     };
@@ -209,6 +227,11 @@ public class MainActivity extends Activity {
             timestamp.setTextColor(PURPLE);noteRow.addView(timestamp);
             space(noteRow,6);
             TextView body=text(n.body,15,false);noteRow.addView(body);
+            if(n.audioPath!=null&&!n.audioPath.isEmpty()){
+                TextView listen=button("▶ Play saved voice note",false);noteRow.addView(listen);
+                listen.setOnClickListener(v->playNoteAudio(n.audioPath));
+                space(noteRow,8);
+            }
             space(noteRow,8);
             TextView jump=button("Play from 15s before",false);
             noteRow.addView(jump);
@@ -250,14 +273,91 @@ public class MainActivity extends Activity {
         resumeAfterNote=player.isPlaying();
         if(resumeAfterNote){if(playback!=null)playback.pause();else player.pause();}
         if(playButton!=null)playButton.setText("Play");
-        String[] choices={"Dictate note","Type note","Cancel"};
+        String[] choices={"Record voice note","Dictate note","Type note","Cancel"};
         new android.app.AlertDialog.Builder(this)
             .setTitle("Bookmark at "+format(pendingPosition))
             .setItems(choices,(dialog,which)->{
-                if(which==0)dictateNote();
-                else if(which==1)typeNote("");
+                if(which==0)beginRecording();
+                else if(which==1)dictateNote();
+                else if(which==2)typeNote("");
                 else resumeAfterCapture();
             }).setOnCancelListener(d -> resumeAfterCapture()).show();
+    }
+    private void beginRecording(){
+        if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},MIC_PERMISSION);return;
+        }
+        File directory=new File(getFilesDir(),"voice_notes");
+        if(!directory.exists()&&!directory.mkdirs()){resumeAfterCapture();return;}
+        recordingFile=new File(directory,"note_"+System.currentTimeMillis()+".m4a");
+        try{
+            recorder=new MediaRecorder();
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            recorder.setOutputFile(recordingFile.getAbsolutePath());
+            recorder.prepare();recorder.start();
+            recording=true;heardVoice=false;
+            recordingStarted=SystemClock.elapsedRealtime();
+            lastVoice=recordingStarted;
+            recordingStatus=text("Recording… Speak your note. Silence will save after 4 seconds.",16,false);
+            recordingDialog=new android.app.AlertDialog.Builder(this).setTitle("Voice bookmark")
+              .setView(recordingStatus)
+              .setPositiveButton("Save note",(d,w)->finishRecording(true))
+              .setNegativeButton("Discard",(d,w)->finishRecording(false))
+              .setOnCancelListener(d->finishRecording(false))
+              .show();
+        }catch(Exception ex){
+            recording=false;
+            if(recorder!=null){try{recorder.release();}catch(Exception ignored){}recorder=null;}
+            if(recordingFile!=null)recordingFile.delete();
+            resumeAfterCapture();
+            new android.app.AlertDialog.Builder(this).setMessage("Microphone unavailable: "+ex.getMessage()).setPositiveButton("OK",null).show();
+        }
+    }
+    private void monitorRecording(){
+        if(recorder==null)return;
+        try{
+            long now=SystemClock.elapsedRealtime();
+            int amplitude=recorder.getMaxAmplitude();
+            if(amplitude>1600){heardVoice=true;lastVoice=now;}
+            if(recordingStatus!=null)recordingStatus.setText("Recording voice note • "+((now-recordingStarted)/1000)+"s\nSave note, or pause speaking for 4 seconds.");
+            if(heardVoice&&now-lastVoice>=4000)finishRecording(true);
+        }catch(Exception ignored){}
+    }
+    private void finishRecording(boolean save){
+        if(!recording)return;
+        recording=false;
+        boolean valid=true;
+        try{recorder.stop();}catch(Exception ex){valid=false;}
+        try{recorder.release();}catch(Exception ignored){}
+        recorder=null;
+        if(recordingDialog!=null){recordingDialog.dismiss();recordingDialog=null;}
+        if(save&&valid&&recordingFile!=null&&recordingFile.exists()&&recordingFile.length()>0){
+            notes.add(new Note(pendingBookUri,"Voice note • tap to listen",pendingPosition,recordingFile.getAbsolutePath()));
+            saveNotes();
+            if(tts!=null)tts.speak("Note saved",TextToSpeech.QUEUE_FLUSH,null,"note-saved");
+        }else if(recordingFile!=null)recordingFile.delete();
+        resumeAfterCapture();
+        render();
+    }
+    private void playNoteAudio(String path){
+        try{
+            MediaPlayer recordingPlayer=new MediaPlayer();
+            recordingPlayer.setDataSource(path);
+            recordingPlayer.prepare();
+            recordingPlayer.setOnCompletionListener(mp->{mp.release();});
+            recordingPlayer.start();
+        }catch(Exception e){
+            new android.app.AlertDialog.Builder(this).setMessage("Unable to play saved note: "+e.getMessage()).setPositiveButton("OK",null).show();
+        }
+    }
+    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
+        super.onRequestPermissionsResult(request,permissions,results);
+        if(request==MIC_PERMISSION){
+            if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)beginRecording();
+            else resumeAfterCapture();
+        }
     }
     private void dictateNote() {
         Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
@@ -303,7 +403,7 @@ public class MainActivity extends Activity {
             JSONArray a=new JSONArray(prefs.getString("notes","[]"));
             for(int i=0;i<a.length();i++) {
                 JSONObject n=a.getJSONObject(i);
-                notes.add(new Note(n.getString("bookUri"),n.getString("body"),n.getInt("position")));
+                notes.add(new Note(n.getString("bookUri"),n.getString("body"),n.getInt("position"),n.optString("audioPath","")));
             }
         }catch(Exception ignored){}
     }
@@ -312,7 +412,7 @@ public class MainActivity extends Activity {
         for(Note n:notes) {
             JSONObject o=new JSONObject();
             try {
-                o.put("bookUri",n.bookUri);o.put("body",n.body);o.put("position",n.position);
+                o.put("bookUri",n.bookUri);o.put("body",n.body);o.put("position",n.position);o.put("audioPath",n.audioPath);
             }catch(Exception ignored){}
             a.put(o);
         }
@@ -386,5 +486,5 @@ public class MainActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();if(updater!=null)updater.onResume();}
     @Override protected void onPause(){super.onPause();saveBooks();}
-    @Override protected void onDestroy(){if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
+    @Override protected void onDestroy(){if(recording)finishRecording(false);if(tts!=null)tts.shutdown();if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
 }
