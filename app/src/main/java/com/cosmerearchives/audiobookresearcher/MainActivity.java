@@ -18,6 +18,9 @@ import android.database.Cursor;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
+import android.speech.RecognizerIntent;
+import java.util.ArrayList;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -27,6 +30,11 @@ import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private static final int PICK_AUDIO = 200;
+    private static final int DICTATE_NOTE = 201;
+    private final ArrayList<Note> notes = new ArrayList<>();
+    private String pendingBookUri;
+    private int pendingPosition;
+    private boolean resumeAfterNote;
     private static final int PURPLE = Color.rgb(105,92,137);
     private static final int INK = Color.rgb(62,60,58);
     private static final int BG = Color.rgb(247,246,242);
@@ -45,6 +53,11 @@ public class MainActivity extends Activity {
         Book(String u, String t, int p) { uri=u; title=t; position=p; }
     }
 
+    private static class Note {
+        String bookUri, body; int position;
+        Note(String u, String b, int p) { bookUri=u; body=b; position=p; }
+    }
+
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().setStatusBarColor(BG);
@@ -52,6 +65,7 @@ public class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         prefs = getSharedPreferences("library", MODE_PRIVATE);
         restoreBooks();
+        restoreNotes();
         render();
         handler.postDelayed(ticker, 1000);
     }
@@ -162,7 +176,37 @@ public class MainActivity extends Activity {
             playButton.setOnClickListener(v->toggle());
             panel.addView(buttons); root.addView(panel);
             space(root,14);
+            TextView noteButton=button("+ Add bookmarked note",true);
+            root.addView(noteButton);
+            noteButton.setOnClickListener(v -> startNote());
+            space(root,18);
         }
+        TextView notesHeading=text("Bookmarked notes",21,true);root.addView(notesHeading);
+        space(root,10);
+        int noteCount=0;
+        for(int i=notes.size()-1;i>=0;i--) {
+            Note n=notes.get(i);
+            if(active==null || !n.bookUri.equals(active.uri))continue;
+            noteCount++;
+            LinearLayout noteRow=new LinearLayout(this);
+            noteRow.setOrientation(LinearLayout.VERTICAL);
+            noteRow.setPadding(dp(15),dp(13),dp(15),dp(13));
+            noteRow.setBackground(shape(Color.WHITE,14,0xFFE0DDD8));
+            TextView timestamp=text("BOOKMARK  •  "+format(n.position),12,true);
+            timestamp.setTextColor(PURPLE);noteRow.addView(timestamp);
+            space(noteRow,6);
+            TextView body=text(n.body,15,false);noteRow.addView(body);
+            space(noteRow,8);
+            TextView jump=button("Play from 15s before",false);
+            noteRow.addView(jump);
+            jump.setOnClickListener(v -> {
+                seekTo(n.position-15000);
+                if(player!=null&&!player.isPlaying())toggle();
+            });
+            root.addView(noteRow);space(root,10);
+        }
+        if(noteCount==0)root.addView(text(active==null?"Open an audiobook to view its notes.":"No notes for this audiobook yet.",14,false));
+        space(root,18);
         TextView updaterTitle = text("App updates",20,true); root.addView(updaterTitle);
         space(root,9);
         status=text("Checking for new versions…",14,false); root.addView(status);
@@ -172,6 +216,81 @@ public class MainActivity extends Activity {
         updateButton.setOnClickListener(v->updater.check());
         updater.check();
         setContentView(scroll);
+    }
+    private void startNote() {
+        if(active==null||player==null)return;
+        pendingBookUri=active.uri;
+        pendingPosition=player.getCurrentPosition();
+        resumeAfterNote=player.isPlaying();
+        if(resumeAfterNote)player.pause();
+        if(playButton!=null)playButton.setText("Play");
+        String[] choices={"Dictate note","Type note","Cancel"};
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Bookmark at "+format(pendingPosition))
+            .setItems(choices,(dialog,which)->{
+                if(which==0)dictateNote();
+                else if(which==1)typeNote("");
+                else resumeAfterCapture();
+            }).setOnCancelListener(d -> resumeAfterCapture()).show();
+    }
+    private void dictateNote() {
+        Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT,"Speak your audiobook note");
+        try { startActivityForResult(intent,DICTATE_NOTE); }
+        catch(android.content.ActivityNotFoundException ex) {
+            new android.app.AlertDialog.Builder(this).setMessage("No speech recognition service is installed. Type your note instead.")
+            .setPositiveButton("Type note",(d,w)->typeNote(""))
+            .setNegativeButton("Cancel",(d,w)->resumeAfterCapture()).show();
+        }
+    }
+    private void typeNote(String initial) {
+        EditText input=new EditText(this);
+        input.setSingleLine(false);input.setMinLines(3);
+        input.setText(initial);input.setHint("Your note…");
+        LinearLayout wrapper=new LinearLayout(this);
+        wrapper.setPadding(dp(20),dp(8),dp(20),0);wrapper.addView(input);
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Save note at "+format(pendingPosition))
+            .setView(wrapper)
+            .setPositiveButton("Save",(d,w)->{
+                String value=input.getText().toString().trim();
+                if(!value.isEmpty()) {
+                    notes.add(new Note(pendingBookUri,value,pendingPosition));
+                    saveNotes();
+                }
+                resumeAfterCapture();
+                render();
+            })
+            .setNegativeButton("Cancel",(d,w)->resumeAfterCapture())
+            .setOnCancelListener(d->resumeAfterCapture()).show();
+    }
+    private void resumeAfterCapture() {
+        if(resumeAfterNote && player!=null) {
+            player.start();
+            if(playButton!=null)playButton.setText("Pause");
+        }
+        resumeAfterNote=false;
+    }
+    private void restoreNotes() {
+        try {
+            JSONArray a=new JSONArray(prefs.getString("notes","[]"));
+            for(int i=0;i<a.length();i++) {
+                JSONObject n=a.getJSONObject(i);
+                notes.add(new Note(n.getString("bookUri"),n.getString("body"),n.getInt("position")));
+            }
+        }catch(Exception ignored){}
+    }
+    private void saveNotes() {
+        JSONArray a=new JSONArray();
+        for(Note n:notes) {
+            JSONObject o=new JSONObject();
+            try {
+                o.put("bookUri",n.bookUri);o.put("body",n.body);o.put("position",n.position);
+            }catch(Exception ignored){}
+            a.put(o);
+        }
+        prefs.edit().putString("notes",a.toString()).apply();
     }
     private void toggle() {
         if(player==null)return;
@@ -207,6 +326,13 @@ public class MainActivity extends Activity {
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
+        if(request==DICTATE_NOTE) {
+            if(result==RESULT_OK && data!=null) {
+                ArrayList<String> resultText=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+                typeNote(resultText!=null&&!resultText.isEmpty()?resultText.get(0):"");
+            } else resumeAfterCapture();
+            return;
+        }
         if(request!=PICK_AUDIO || result!=RESULT_OK || data==null || data.getData()==null)return;
         Uri uri=data.getData();
         try {getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}
