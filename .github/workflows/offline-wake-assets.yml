@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - name: Download and verify sherpa-onnx Android library
         run: |
           set -euo pipefail
@@ -29,7 +32,7 @@ jobs:
           test -f wake-assets/model/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/tokens.txt
       - name: Generate Bookmark keyword from English BPE model
         run: |
-          python -m pip install --disable-pip-version-check sentencepiece==0.2.0
+          python -m pip install --disable-pip-version-check --only-binary=:all: sentencepiece==0.2.0
           python scripts/make-bookmark-keyword.py \
             wake-assets/model/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/bpe.model \
             wake-assets/model/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/keywords.txt
