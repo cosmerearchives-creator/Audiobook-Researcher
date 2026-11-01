@@ -79,8 +79,13 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                         }
                     }
                 }
-            } catch (e: Exception) {
-                if (running) main.post { onError.accept(e.message ?: e.javaClass.simpleName) }
+            } catch (e: Throwable) {
+                android.util.Log.e("WakeDetector","Wake detector failed",e)
+                if (running) {
+                    val detail = e.javaClass.simpleName + ": " + (e.message ?: "unknown error")
+                    context.getSharedPreferences("library",Context.MODE_PRIVATE).edit().putString("wakeLastError",detail).apply()
+                    main.post { onError.accept(detail) }
+                }
             } finally {
                 try { microphone?.stop() } catch (_: Exception) {}
                 microphone?.release()
