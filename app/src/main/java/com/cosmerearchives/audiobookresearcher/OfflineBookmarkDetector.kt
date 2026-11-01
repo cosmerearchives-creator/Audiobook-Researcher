@@ -42,11 +42,13 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                     keywordsFile = "", // Do not load the bundled default Hey Bookmark keyword.
                     keywordsThreshold = 0.50f - sensitivity * 0.004f
                 )
+                context.getSharedPreferences("library",Context.MODE_PRIVATE).edit().putString("wakeStartupStage","loading ONNX keyword spotter").commit()
                 spotter = KeywordSpotter(assetManager = context.assets, config = config)
                 val phrase = context.getSharedPreferences("library", Context.MODE_PRIVATE)
                     .getString("wakePhrase", "Hey Bookmark") ?: "Hey Bookmark"
                 val tokens = tokenizePhrase(phrase, dir)
                 val normalizedPhrase = phrase.trim().uppercase(Locale.ROOT).replace(Regex("\\s+"), " ")
+                context.getSharedPreferences("library",Context.MODE_PRIVATE).edit().putString("wakeStartupStage","creating custom phrase stream").commit()
                 stream = spotter.createStream(tokens.joinToString(" ") + " @" + normalizedPhrase.replace(" ", "_"))
                 val size = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 require(size > 0) { "No compatible microphone buffer" }
@@ -54,7 +56,9 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                     AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, size * 2)
                 microphone = mic
                 require(mic.state == AudioRecord.STATE_INITIALIZED) { "Microphone initialization failed" }
+                context.getSharedPreferences("library",Context.MODE_PRIVATE).edit().putString("wakeStartupStage","starting microphone capture").commit()
                 mic.startRecording()
+                context.getSharedPreferences("library",Context.MODE_PRIVATE).edit().putString("wakeStartupStage","listening").apply()
                 val buffer = ShortArray(1600)
                 var lastLevel=0L
                 while (running) {
