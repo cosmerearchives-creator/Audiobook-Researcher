@@ -73,6 +73,7 @@ public class HandsFreeService extends Service {
             }
             enabled=true;
             lastStartError="";
+            getSharedPreferences("library",MODE_PRIVATE).edit().remove("wakeLastError").apply();
             serviceActive=true;listeningState="Starting";
             getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",true).apply();
             showNotification("Offline listening for Bookmark");
@@ -104,7 +105,7 @@ public class HandsFreeService extends Service {
         showNotification("Offline listening for Bookmark");
         detector=new OfflineBookmarkDetector(this,
             ()->{if(!enabled||!listening)return;listening=false;capture();},
-            error->{listening=false;lastStartError=error;listeningState="Error: "+error;showNotification("Microphone error: "+error);scheduleRestart();},
+            error->{listening=false;lastStartError=error;listeningState="Error: "+error;getSharedPreferences("library",MODE_PRIVATE).edit().putString("wakeLastError",error).apply();showNotification("Microphone error: "+error);},
             level->receivedLevel(level)
         );
         detector.start();
