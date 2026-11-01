@@ -31,7 +31,7 @@ public class NowPlayingActivity extends Activity {
     private static final int PURPLE=0xFF7F64B7;
     private PlaybackService playback;
     private String displayedUri="";
-    private TextView play,elapsed,remaining,microphone;
+    private TextView play,elapsed,remaining,microphone,wakeErrorText;
     private SeekBar seek;
     private boolean dragging;
     private boolean voiceStartRequested=false;
@@ -163,6 +163,8 @@ public class NowPlayingActivity extends Activity {
         column.addView(title,new LinearLayout.LayoutParams(-1,dp(70)));
         TextView chapter=label(customGroup==null?"NOW PLAYING":playback.title,14,false);
         chapter.setTextColor(0xFFDCD2F6);column.addView(chapter);
+        wakeErrorText=label("",12,true);wakeErrorText.setTextColor(0xFFFFD8D5);
+        column.addView(wakeErrorText);
         FrameLayout middle=new FrameLayout(this);
         column.addView(middle,new LinearLayout.LayoutParams(-1,0,1));
         FrameLayout coverButton=new FrameLayout(this);
@@ -257,6 +259,7 @@ public class NowPlayingActivity extends Activity {
         if(play!=null)play.setText(p.isPlaying()?"❚❚":"▶");
         if(microphone!=null){
             String error=getSharedPreferences("library",MODE_PRIVATE).getString("wakeLastError","");
+            if(wakeErrorText!=null){wakeErrorText.setText(error.isEmpty()?"":"Voice activation error: "+error);wakeErrorText.setVisibility(error.isEmpty()?View.GONE:View.VISIBLE);}
             boolean enabled=HandsFreeService.serviceActive && error.isEmpty() && !HandsFreeService.listeningState.startsWith("Error:");
             if(enabled)voiceStartRequested=false;
             microphone.setAlpha(1f);
