@@ -1064,14 +1064,40 @@ public class MainActivity extends Activity {
         }catch(Exception ignored){}
     }
     private void saveBooks() {
-        JSONArray items=new JSONArray();
-        for(Book b:books){JSONObject item=new JSONObject();try{
-            item.put("uri",b.uri);item.put("title",b.title);item.put("position",b.position);
-            item.put("coverUri",b.coverUri);item.put("folderUri",b.folderUri);
-            item.put("album",b.album);item.put("artist",b.artist);item.put("track",b.track);
-            item.put("started",b.started);item.put("completed",b.completed);
-        }catch(Exception ignored){}items.put(item);}
-        prefs.edit().putString("books",items.toString()).apply();
+        // Merge rather than replace: multiple Activity instances and the playback
+        // service can update the same SharedPreferences library concurrently.
+        synchronized(MainActivity.class){
+            JSONObject saved=new JSONObject();
+            try{
+                JSONArray previous=new JSONArray(prefs.getString("books","[]"));
+                for(int i=0;i<previous.length();i++){
+                    JSONObject item=previous.optJSONObject(i);
+                    if(item!=null&&!item.optString("uri").isEmpty())saved.put(item.optString("uri"),item);
+                }
+                for(Book b:books){
+                    JSONObject item=saved.optJSONObject(b.uri);
+                    if(item==null)item=new JSONObject();
+                    item.put("uri",b.uri);
+                    item.put("title",b.title);
+                    // Do not overwrite a more recent service position with
+                    // a stale Activity snapshot of the same playing file.
+                    boolean currentlyPlaying=PlaybackService.instance!=null
+                        &&b.uri.equals(PlaybackService.instance.uri);
+                    int position=currentlyPlaying?PlaybackService.instance.position():b.position;
+                    boolean completed=item.optBoolean("completed",false)||b.completed;
+                    item.put("position",completed?Math.max(position,item.optInt("position",0)):position);
+                    item.put("coverUri",b.coverUri);item.put("folderUri",b.folderUri);
+                    item.put("album",b.album);item.put("artist",b.artist);item.put("track",b.track);
+                    item.put("started",item.optBoolean("started",false)||b.started||position>0);
+                    item.put("completed",completed);
+                    saved.put(b.uri,item);
+                }
+                JSONArray items=new JSONArray();
+                java.util.Iterator<String> keys=saved.keys();
+                while(keys.hasNext()){JSONObject item=saved.optJSONObject(keys.next());if(item!=null)items.put(item);}
+                prefs.edit().putString("books",items.toString()).commit();
+            }catch(Exception e){android.util.Log.e("AudiobookLibrary","Cannot save books",e);}
+        }
     }
     @Override protected void onResume(){super.onResume();if(buttonTestTicker!=null&&section.equals("tools"))handler.post(buttonTestTicker);if(updater!=null)updater.onResume();if(prefs!=null){notes.clear();restoreNotes();}}
     @Override protected void onPause(){if(buttonTestTicker!=null)handler.removeCallbacks(buttonTestTicker);stopWake();super.onPause();saveBooks();}
