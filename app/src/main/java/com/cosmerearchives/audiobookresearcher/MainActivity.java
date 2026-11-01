@@ -545,10 +545,8 @@ public class MainActivity extends Activity {
                     return;
                 }
                 prefs.edit().putString("wakePhrase",phrase).apply();
-                if(backgroundHandsFree){
-                    stopService(new Intent(this,HandsFreeService.class));
-                    backgroundHandsFree=false;
-                    prefs.edit().putBoolean("backgroundHandsFree",false).apply();
+                if(HandsFreeService.serviceActive){
+                    startService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.RELOAD));
                 }
                 render();
             })
