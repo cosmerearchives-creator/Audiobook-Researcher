@@ -323,6 +323,12 @@ public class MainActivity extends Activity {
         }
         if(section.equals("options")){
         {
+            android.widget.CheckBox includeWrapping=new android.widget.CheckBox(this);
+            includeWrapping.setText("Include wrapping chapters and sections");
+            includeWrapping.setChecked(prefs.getBoolean("includeWrapping",false));
+            root.addView(includeWrapping);
+            includeWrapping.setOnCheckedChangeListener((view,checked)->prefs.edit().putBoolean("includeWrapping",checked).apply());
+            space(root,10);
             TextView diagnostics=button("Wake detection settings & test",false);
             root.addView(diagnostics);
             diagnostics.setOnClickListener(v->openWakeDiagnostics());
