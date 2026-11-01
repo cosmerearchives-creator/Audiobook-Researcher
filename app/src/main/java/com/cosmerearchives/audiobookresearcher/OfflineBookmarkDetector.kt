@@ -12,7 +12,7 @@ import org.json.JSONObject
 import java.util.Locale
 
 /** Single-purpose, offline 16 kHz Bookmark detector. */
-class OfflineBookmarkDetector(private val context: Context, private val onDetected: Runnable, private val onError: java.util.function.Consumer<String>) {
+class OfflineBookmarkDetector(private val context: Context, private val onDetected: Runnable, private val onError: java.util.function.Consumer<String>, private val onLevel: java.util.function.IntConsumer) {
     @Volatile private var running = false
     private var worker: Thread? = null
     private var microphone: AudioRecord? = null
@@ -27,6 +27,7 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
             var detected = false
             try {
                 val dir = "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01"
+                val sensitivity = context.getSharedPreferences("library", Context.MODE_PRIVATE).getInt("wakeSensitivity", 60).coerceIn(0,100)
                 val config = KeywordSpotterConfig(
                     featConfig = FeatureConfig(sampleRate = 16000, featureDim = 80),
                     modelConfig = OnlineModelConfig(
@@ -39,7 +40,7 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                         modelType = "zipformer2"
                     ),
                     keywordsFile = "$dir/keywords.txt",
-                    keywordsThreshold = 0.25f
+                    keywordsThreshold = 0.50f - sensitivity * 0.004f
                 )
                 spotter = KeywordSpotter(assetManager = context.assets, config = config)
                 val phrase = context.getSharedPreferences("library", Context.MODE_PRIVATE)
@@ -54,10 +55,18 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                 require(mic.state == AudioRecord.STATE_INITIALIZED) { "Microphone initialization failed" }
                 mic.startRecording()
                 val buffer = ShortArray(1600)
+                var lastLevel=0L
                 while (running) {
                     val n = mic.read(buffer, 0, buffer.size)
                     if (n <= 0) continue
                     val samples = FloatArray(n) { buffer[it] / 32768.0f }
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if(now-lastLevel>=200){
+                        val rms = kotlin.math.sqrt(samples.map { it*it }.average()).toFloat()
+                        val level = (rms*1200).toInt().coerceIn(0,100)
+                        main.post { onLevel.accept(level) }
+                        lastLevel=now
+                    }
                     stream.acceptWaveform(samples, 16000)
                     while (running && spotter.isReady(stream)) {
                         spotter.decode(stream)
