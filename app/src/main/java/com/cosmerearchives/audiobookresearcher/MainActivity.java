@@ -138,7 +138,11 @@ public class MainActivity extends Activity {
             boolean launchPlayer=getIntent().getBooleanExtra("openPlayer",false) || !getIntent().hasExtra("section");
             if(playback.player==null&&launchPlayer&&!books.isEmpty()){
                 try{
-                    Book book=books.get(0);active=book;
+                    String recent=prefs.getString("lastBookUri","");
+                    Book book=books.get(0);
+                    for(Book candidate:books)if(candidate.uri.equals(recent)){book=candidate;break;}
+                    active=book;
+                    startService(new Intent(MainActivity.this,PlaybackService.class));
                     playback.open(book.uri,book.title,book.position);
                     playback.pause();
                 }catch(Exception ignored){}
