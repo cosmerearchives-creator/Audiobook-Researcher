@@ -49,6 +49,8 @@ public class MainActivity extends Activity {
     private boolean backgroundHandsFree;
     private String section="library";
     private Runnable buttonTestTicker;
+    private ScrollView libraryScroll;
+    private int pendingLibraryScroll=-1;
     private MediaPlayer notePlayer;
     private Note playingNote;
     private Runnable noteTicker;
@@ -236,6 +238,7 @@ public class MainActivity extends Activity {
     private void render() {
         if(notePlayer!=null)stopNotePlayer();
         ScrollView scroll = new ScrollView(this);
+        if(section.equals("library"))libraryScroll=scroll;
         scroll.setFillViewport(true); scroll.setBackgroundColor(BG);
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20),dp(28),dp(20),dp(30)); scroll.addView(root);
@@ -450,6 +453,11 @@ public class MainActivity extends Activity {
         updater.check();
         }
         setContentView(scroll);
+        if(section.equals("library")&&pendingLibraryScroll>=0){
+            final int restoreY=pendingLibraryScroll;
+            pendingLibraryScroll=-1;
+            scroll.post(()->scroll.scrollTo(0,restoreY));
+        }
     }
     private void openWakeDiagnostics(){
         LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);
@@ -900,7 +908,13 @@ public class MainActivity extends Activity {
         captions.addView(detail);header.addView(captions,new LinearLayout.LayoutParams(0,-2,1));
         TextView arrow=text(expanded?"⌄":"›",26,true);header.addView(arrow);
         root.addView(header);space(root,6);
-        header.setOnClickListener(v->{prefs.edit().putBoolean("expanded:"+key,!expanded).apply();render();});
+        header.setOnClickListener(v->{
+            // Preserve the reader's location instead of resetting the whole list
+            // to the top when a chapter group is expanded or collapsed.
+            pendingLibraryScroll=libraryScroll==null?0:libraryScroll.getScrollY();
+            prefs.edit().putBoolean("expanded:"+key,!expanded).apply();
+            render();
+        });
         if(!expanded){space(root,12);return;}
         TextView playAll=button("▶ Play "+name,true);root.addView(playAll);
         playAll.setOnClickListener(v->{
