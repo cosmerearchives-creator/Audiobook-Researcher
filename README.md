@@ -82,3 +82,23 @@ The audiobook player's **Wake detection settings & test** panel now offers:
 During hands-free listening, sufficiently strong microphone activity can temporarily lower the **app's own audiobook playback volume by 80%** (to 20% original). Volume returns when activity subsides, on successful detection, when recording stops, or when the listening service shuts down. This does **not** change the phone's system-wide media volume. A cooldown reduces rapid volume pumping. The activity gate is a basic amplitude heuristic, not speaker isolation: audiobook narration or road noise may trigger it. Tuning sliders take effect after restarting hands-free listening; the settings panel stops an active session when saved.
 
 The above controls are committed but require CI and on-device verification. Avoid driving while interacting with the diagnostic screen.
+
+
+## Driving-oriented player UI and cover artwork
+
+The active player now appears near the top of the screen ahead of the library,
+notes, and settings. Its three playback controls use 78dp-tall hit targets,
+with a wider central play/pause control; 15-second back and 30-second forward
+remain available. Artwork and playback progress are presented in the same
+high-contrast card, retaining the muted-purple application style.
+
+Because Android's Storage Access Framework does not grant access to sibling
+files merely from an imported audio document, tap **Find cover in audiobook
+folder** once and select the folder containing the book. The app persists
+permission to this folder and searches for JPG/JPEG/PNG/WEBP images, prioritizing
+cover.*, folder.*, front.*, and filenames containing "cover" or "artwork".
+The selected image URI is saved per book and remains available after app
+restarts. It does not request whole-device storage permissions. Artwork folder
+selection is not intended to be performed while driving.
+
+These source changes still require CI and real-device verification.
