@@ -136,10 +136,12 @@ public class MainActivity extends Activity {
     private PlaybackService playback;
     private boolean bound;
     private boolean pendingOpenPlayer;
+    private boolean automaticPlayerLaunchConsumed;
     private final android.content.ServiceConnection serviceConnection=new android.content.ServiceConnection(){
         @Override public void onServiceConnected(android.content.ComponentName name,android.os.IBinder binder){
             playback=((PlaybackService.LocalBinder)binder).service();bound=true;
-            boolean launchPlayer=pendingOpenPlayer || getIntent().getBooleanExtra("openPlayer",false) || !getIntent().hasExtra("section");
+            boolean launchPlayer=!automaticPlayerLaunchConsumed && (pendingOpenPlayer || getIntent().getBooleanExtra("openPlayer",false) || !getIntent().hasExtra("section"));
+            automaticPlayerLaunchConsumed=true;
             pendingOpenPlayer=false;
             if(playback.player==null&&launchPlayer&&!books.isEmpty()){
                 try{
@@ -156,7 +158,10 @@ public class MainActivity extends Activity {
                 player=playback.player;
                 for(Book book:books)if(book.uri.equals(playback.uri)){active=book;break;}
                 render();
-                if(launchPlayer)startActivity(new Intent(MainActivity.this,NowPlayingActivity.class));
+                if(launchPlayer){
+                    getIntent().putExtra("section","library");
+                    startActivity(new Intent(MainActivity.this,NowPlayingActivity.class));
+                }
             }
         }
         @Override public void onServiceDisconnected(android.content.ComponentName name){bound=false;playback=null;player=null;}
