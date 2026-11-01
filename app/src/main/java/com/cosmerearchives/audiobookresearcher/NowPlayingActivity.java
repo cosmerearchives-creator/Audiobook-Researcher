@@ -34,6 +34,7 @@ public class NowPlayingActivity extends Activity {
     private TextView play,elapsed,remaining,microphone;
     private SeekBar seek;
     private boolean dragging;
+    private boolean voiceStartRequested=false;
     private AudioManager audioManager;
     private boolean bluetoothConnected=false, bluetoothStartedVoice=false;
     private final AudioDeviceCallback bluetoothWatcher=new AudioDeviceCallback(){
@@ -147,6 +148,7 @@ public class NowPlayingActivity extends Activity {
                 }
                 catch(Exception e){android.widget.Toast.makeText(this,"Microphone unavailable: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
             }else requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO},300);
+            voiceStartRequested=true;
             handler.postDelayed(this::refresh,350);
         });
         column.addView(top);
@@ -245,11 +247,12 @@ public class NowPlayingActivity extends Activity {
     }
     private void refresh(){
         PlaybackService p=PlaybackService.instance;
-        if(p==null||p.player==null){finish();return;}
+        if(p==null||p.player==null){if(play!=null)play.setText("▶");return;}
         if(!displayedUri.equals(p.uri)){recreate();return;}
         if(play!=null)play.setText(p.isPlaying()?"❚❚":"▶");
         if(microphone!=null){
             boolean enabled=HandsFreeService.serviceActive;
+            if(enabled)voiceStartRequested=false;
             microphone.setAlpha(1f);
             microphone.setText(enabled?"🎙":"🎙");
             microphone.setContentDescription(enabled?"Voice activation on. Tap to stop.":"Voice activation off. Tap to start.");
