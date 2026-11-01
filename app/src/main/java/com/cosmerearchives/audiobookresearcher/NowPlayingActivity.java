@@ -255,7 +255,7 @@ public class NowPlayingActivity extends Activity {
     private void refresh(){
         PlaybackService p=PlaybackService.instance;
         if(p==null||p.player==null){if(play!=null)play.setText("▶");return;}
-        if(!displayedUri.equals(p.uri)){recreate();return;}
+        if(!displayedUri.equals(p.uri)){displayedUri=p.uri; /* Avoid activity recreation loops during audio transitions. */}
         if(play!=null)play.setText(p.isPlaying()?"❚❚":"▶");
         if(microphone!=null){
             String error=getSharedPreferences("library",MODE_PRIVATE).getString("wakeLastError","");
