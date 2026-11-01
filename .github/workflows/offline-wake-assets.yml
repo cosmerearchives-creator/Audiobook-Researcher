@@ -1,4 +1,4 @@
-name: Prepare offline wake-word assets
+name: Prepare offline Bookmark detector assets
 on:
   workflow_dispatch:
 
@@ -10,21 +10,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download sherpa-onnx English keyword model and Android runtime
+      - name: Download and verify sherpa-onnx Android library
         run: |
           set -euo pipefail
           mkdir -p wake-assets
+          curl -fL --retry 3 -o wake-assets/sherpa-onnx-2.0.1.aar \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-2.0.1.aar
+          echo "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7  wake-assets/sherpa-onnx-2.0.1.aar" | sha256sum -c -
+          unzip -t wake-assets/sherpa-onnx-2.0.1.aar >/dev/null
+      - name: Download English keyword spotting model
+        run: |
+          set -euo pipefail
           curl -fL --retry 3 -o wake-assets/model.tar.bz2 \
             https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2
-          curl -fL --retry 3 -o wake-assets/android.tar.bz2 \
-            https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-v2.0.1-android.tar.bz2
-          test "$(stat -c %s wake-assets/model.tar.bz2)" -gt 100000
-          test "$(stat -c %s wake-assets/android.tar.bz2)" -gt 100000
-          sha256sum wake-assets/*.tar.bz2 | tee wake-assets/SHA256SUMS
-          tar -tjf wake-assets/model.tar.bz2 | head -40 || true
-          tar -tjf wake-assets/android.tar.bz2 | head -40 || true
+          mkdir -p wake-assets/model
+          tar -xjf wake-assets/model.tar.bz2 --directory wake-assets/model
+          test -f wake-assets/model/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/bpe.model
+          test -f wake-assets/model/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/tokens.txt
+      - name: Generate Bookmark keyword from English BPE model
+        run: |
+          python -m pip install --disable-pip-version-check sentencepiece==0.2.0
+          python scripts/make-bookmark-keyword.py \
+            wake-assets/model/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/bpe.model \
+            wake-assets/model/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/keywords.txt
+          sha256sum wake-assets/sherpa-onnx-2.0.1.aar wake-assets/model.tar.bz2 > wake-assets/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
-          name: sherpa-onnx-offline-wake-assets
-          path: wake-assets/
+          name: sherpa-onnx-bookmark-assets
+          path: |
+            wake-assets/sherpa-onnx-2.0.1.aar
+            wake-assets/SHA256SUMS
+            wake-assets/model/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/*.onnx
+            wake-assets/model/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/tokens.txt
+            wake-assets/model/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/keywords.txt
           retention-days: 7
