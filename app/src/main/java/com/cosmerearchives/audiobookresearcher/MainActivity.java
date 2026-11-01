@@ -463,6 +463,21 @@ public class MainActivity extends Activity {
         space(root,18);
         }
         if(section.equals("tools")){
+            TextView crashTitle=text("Startup & crash diagnostics",21,true);
+            root.addView(crashTitle);space(root,8);
+            TextView crashReport=text(prefs.getString("lastCrashReport","No Java crash recorded yet."),12,false);
+            crashReport.setTextIsSelectable(true);
+            crashReport.setPadding(dp(12),dp(12),dp(12),dp(12));
+            crashReport.setBackground(shape(Color.WHITE,12,0xFFE0DDD8));
+            root.addView(crashReport);space(root,8);
+            TextView copyCrash=button("Copy crash report",false);
+            root.addView(copyCrash);
+            copyCrash.setOnClickListener(v->{
+                android.content.ClipboardManager clipboard=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Audiobook Researcher crash",prefs.getString("lastCrashReport","No Java crash recorded.")));
+                android.widget.Toast.makeText(this,"Crash report copied",android.widget.Toast.LENGTH_SHORT).show();
+            });
+            space(root,18);
             TextView testerTitle=text("Bluetooth Button Tester",21,true);
             root.addView(testerTitle);space(root,8);
             TextView guidance=text("While parked, connect Bluetooth audio and press a steering-wheel button. Only media events Android delivers to the app can appear here. Phone answer and hang-up buttons may not emit media events.",15,false);
