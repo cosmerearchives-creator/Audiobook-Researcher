@@ -46,14 +46,28 @@ public class PlaybackService extends Service {
             @Override public void onSkipToNext(){seek(position()+30000);}
             @Override public void onSeekTo(long p){seek((int)p);}
             @Override public boolean onMediaButtonEvent(Intent intent){
-                KeyEvent key=intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
-                if(key!=null&&key.getAction()==KeyEvent.ACTION_DOWN){
-                    int code=key.getKeyCode();
-                    if(code==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE||code==KeyEvent.KEYCODE_HEADSETHOOK){toggle();return true;}
+                KeyEvent key=intent==null?null:intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+                if(key!=null && key.getAction()==KeyEvent.ACTION_DOWN && key.getRepeatCount()==0){
+                    switch(key.getKeyCode()){
+                        case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+                        case KeyEvent.KEYCODE_HEADSETHOOK:
+                            toggle();return true;
+                        case KeyEvent.KEYCODE_MEDIA_PLAY:
+                            play();return true;
+                        case KeyEvent.KEYCODE_MEDIA_PAUSE:
+                        case KeyEvent.KEYCODE_MEDIA_STOP:
+                            pause();return true;
+                        case KeyEvent.KEYCODE_MEDIA_NEXT:
+                            seek(position()+30000);return true;
+                        case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+                            seek(position()-15000);return true;
+                        default:break;
+                    }
                 }
                 return super.onMediaButtonEvent(intent);
             }
         });
+        session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
         session.setActive(true);
     }
     @Override public IBinder onBind(Intent i){return binder;}
