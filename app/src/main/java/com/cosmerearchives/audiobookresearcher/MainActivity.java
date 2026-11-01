@@ -221,6 +221,10 @@ public class MainActivity extends Activity {
             root.addView(noteButton);
             noteButton.setOnClickListener(v -> startNote());
             space(root,10);
+            TextView diagnostics=button("Wake detection settings & test",false);
+            root.addView(diagnostics);
+            diagnostics.setOnClickListener(v->openWakeDiagnostics());
+            space(root,10);
             TextView phraseTitle=text("Wake phrase",17,true);
             root.addView(phraseTitle);
             space(root,5);
@@ -294,6 +298,55 @@ public class MainActivity extends Activity {
         updateButton.setOnClickListener(v->updater.check());
         updater.check();
         setContentView(scroll);
+    }
+    private void openWakeDiagnostics(){
+        LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(20),dp(8),dp(20),dp(12));
+        TextView intro=text("Higher sensitivity catches more phrases but may cause false positives.",14,false);layout.addView(intro);
+        space(layout,12);
+        TextView label=text("Sensitivity: "+prefs.getInt("wakeSensitivity",60)+"%",15,true);layout.addView(label);
+        SeekBar sensitivity=new SeekBar(this);sensitivity.setMax(100);
+        sensitivity.setProgress(prefs.getInt("wakeSensitivity",60));layout.addView(sensitivity);
+        sensitivity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onStartTrackingTouch(SeekBar b){}
+            public void onProgressChanged(SeekBar b,int value,boolean user){label.setText("Sensitivity: "+value+"%");}
+            public void onStopTrackingTouch(SeekBar b){}
+        });
+        space(layout,10);
+        TextView gateLabel=text("Speech activity gate: "+prefs.getInt("wakeVoiceGate",30),14,true);layout.addView(gateLabel);
+        SeekBar gate=new SeekBar(this);gate.setMax(80);gate.setProgress(prefs.getInt("wakeVoiceGate",30));layout.addView(gate);
+        gate.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onStartTrackingTouch(SeekBar b){}
+            public void onProgressChanged(SeekBar b,int value,boolean user){gateLabel.setText("Speech activity gate: "+value);}
+            public void onStopTrackingTouch(SeekBar b){}
+        });
+        TextView meter=text("Microphone level: --",14,false);layout.addView(meter);
+        TextView counter=text("Successful detections: "+prefs.getInt("wakeDetections",0),14,false);layout.addView(counter);
+        android.widget.CheckBox test=new android.widget.CheckBox(this);
+        test.setText("Test mode: count wake words without creating notes");
+        test.setChecked(prefs.getBoolean("wakeTestMode",false));layout.addView(test);
+        final Runnable[] refresh=new Runnable[1];
+        refresh[0]=()->{
+            meter.setText("Microphone level: "+prefs.getInt("wakeMicLevel",0)+" / 100"+(prefs.getBoolean("wakeDucked",false)?" • Audiobook ducked 80%":""));
+            counter.setText("Successful detections: "+prefs.getInt("wakeDetections",0));
+            handler.postDelayed(refresh[0],400);
+        };
+        handler.post(refresh[0]);
+        new android.app.AlertDialog.Builder(this).setTitle("Wake-word diagnostics")
+            .setView(layout)
+            .setPositiveButton("Save",(d,w)->{
+                prefs.edit().putInt("wakeSensitivity",sensitivity.getProgress())
+                    .putInt("wakeVoiceGate",gate.getProgress())
+                    .putBoolean("wakeTestMode",test.isChecked()).apply();
+                handler.removeCallbacks(refresh[0]);
+                if(backgroundHandsFree){
+                    stopService(new Intent(this,HandsFreeService.class));
+                    backgroundHandsFree=false;
+                    prefs.edit().putBoolean("backgroundHandsFree",false).apply();
+                    render();
+                }
+            }).setNegativeButton("Cancel",(d,w)->handler.removeCallbacks(refresh[0]))
+            .setOnCancelListener(d->handler.removeCallbacks(refresh[0])).show();
     }
     private void editWakePhrase(){
         EditText input=new EditText(this);
