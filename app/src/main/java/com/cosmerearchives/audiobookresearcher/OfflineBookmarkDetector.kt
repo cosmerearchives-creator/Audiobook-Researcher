@@ -39,7 +39,7 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                         tokens = "$dir/tokens.txt",
                         modelType = "zipformer2"
                     ),
-                    keywordsFile = "", // Do not load the bundled default Hey Bookmark keyword.
+                    keywordsFile = "$dir/keywords.txt", // Required bundled keyword-spotter initialization file; results are filtered to the selected phrase.
                     keywordsThreshold = 0.50f - sensitivity * 0.004f
                 )
                 context.getSharedPreferences("library",Context.MODE_PRIVATE).edit().putString("wakeStartupStage","loading ONNX keyword spotter").commit()
