@@ -161,7 +161,7 @@ public class MainActivity extends Activity {
     private UpdateManager updater;
 
     private static class Book {
-        String uri, title, coverUri="", folderUri="", album="", artist="", track=""; int position;
+        String uri, title, coverUri="", folderUri="", album="", artist="", track=""; int position; boolean started=false,completed=false;
         Book(String u, String t, int p) { uri=u; title=t; position=p; }
     }
 
@@ -194,6 +194,8 @@ public class MainActivity extends Activity {
                 try {
                     int position = player.getCurrentPosition();
                     active.position = position;
+                    active.started=active.started||player.isPlaying()||position>0;
+                    if(playback!=null&&playback.player!=player){player=playback.player;for(Book b:books)if(b.uri.equals(playback.uri)){active=b;break;}}
                     if (seek != null && !tracking) seek.setProgress(position);
                     if (progress != null) progress.setText(format(position) + " / " + format(player.getDuration()));
                     if (player.isPlaying()) saveBooks();
@@ -766,6 +768,7 @@ public class MainActivity extends Activity {
             if(playback.player!=null && book.uri.equals(playback.uri)) playback.play();
             else playback.open(book.uri,book.title,book.position);
             player=playback.player;
+            book.started=true;book.completed=false;
             render();
             startActivity(new Intent(this,NowPlayingActivity.class));
         }catch(Exception ex){
@@ -870,7 +873,8 @@ public class MainActivity extends Activity {
     }
 
     private String playbackStatus(Book b){
-        if(b.position<=0)return "Not started";
+        if(b.completed)return "Completed";
+        if(!b.started&&b.position<=0)return "Not started";
         return "Resume at "+format(b.position);
     }
     private void addBookGroup(LinearLayout root,String key,String name,java.util.ArrayList<Book> parts,boolean manual,org.json.JSONObject group){
@@ -881,7 +885,7 @@ public class MainActivity extends Activity {
         LinearLayout captions=new LinearLayout(this);captions.setOrientation(LinearLayout.VERTICAL);
         TextView heading=text(name,18,true);captions.addView(heading);
         String status="Not started";
-        for(Book part:parts)if(part.position>0){status=playbackStatus(part);break;}
+        for(Book part:parts)if(part.started||part.position>0){status=playbackStatus(part);break;}
         TextView detail=text(parts.size()+" part"+(parts.size()==1?"":"s")+" • "+status,13,false);
         captions.addView(detail);header.addView(captions,new LinearLayout.LayoutParams(0,-2,1));
         TextView arrow=text(expanded?"⌄":"›",26,true);header.addView(arrow);
@@ -1029,6 +1033,7 @@ public class MainActivity extends Activity {
                 Book b=new Book(o.getString("uri"),o.getString("title"),o.optInt("position",0));
                 b.coverUri=o.optString("coverUri","");b.folderUri=o.optString("folderUri","");
                 b.album=o.optString("album","");b.artist=o.optString("artist","");b.track=o.optString("track","");
+                b.started=o.optBoolean("started",b.position>0);b.completed=o.optBoolean("completed",false);
                 books.add(b);
             }
         }catch(Exception ignored){}
@@ -1039,6 +1044,7 @@ public class MainActivity extends Activity {
             item.put("uri",b.uri);item.put("title",b.title);item.put("position",b.position);
             item.put("coverUri",b.coverUri);item.put("folderUri",b.folderUri);
             item.put("album",b.album);item.put("artist",b.artist);item.put("track",b.track);
+            item.put("started",b.started);item.put("completed",b.completed);
         }catch(Exception ignored){}items.put(item);}
         prefs.edit().putString("books",items.toString()).apply();
     }
