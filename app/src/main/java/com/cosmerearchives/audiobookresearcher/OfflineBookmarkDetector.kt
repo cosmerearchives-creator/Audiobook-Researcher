@@ -46,7 +46,8 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                 val phrase = context.getSharedPreferences("library", Context.MODE_PRIVATE)
                     .getString("wakePhrase", "Hey Bookmark") ?: "Hey Bookmark"
                 val tokens = tokenizePhrase(phrase, dir)
-                val normalizedPhrase = phrase.trim().uppercase(Locale.ROOT).replace(Regex("\\s+"), " ")\n                stream = spotter.createStream(tokens.joinToString(" ") + " @" + normalizedPhrase.replace(" ", "_"))
+                val normalizedPhrase = phrase.trim().uppercase(Locale.ROOT).replace(Regex("\\s+"), " ")
+                stream = spotter.createStream(tokens.joinToString(" ") + " @" + normalizedPhrase.replace(" ", "_"))
                 val size = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 require(size > 0) { "No compatible microphone buffer" }
                 val mic = AudioRecord(MediaRecorder.AudioSource.MIC, 16000,
