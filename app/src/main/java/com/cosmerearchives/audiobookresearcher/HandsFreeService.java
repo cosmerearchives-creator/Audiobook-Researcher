@@ -74,30 +74,8 @@ public class HandsFreeService extends Service {
         startForeground(43,note,ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
     }
     private OfflineBookmarkDetector detector;
-    private boolean ducked;
-    private long recentVoice;
-    private long lastDuckAt;
-    private final Runnable restoreVolume=()->setDuck(false);
-    private void setDuck(boolean value){
-        if(ducked==value)return;
-        ducked=value;
-        PlaybackService p=PlaybackService.instance;
-        if(p!=null)p.setHandsFreeDuck(value);
-        getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("wakeDucked",value).apply();
-    }
     private void receivedLevel(int level){
         getSharedPreferences("library",MODE_PRIVATE).edit().putInt("wakeMicLevel",level).apply();
-        long now=SystemClock.elapsedRealtime();
-        // Gate on sustained, relatively strong audio so narration does not duck continuously.
-        int gate=getSharedPreferences("library",MODE_PRIVATE).getInt("wakeVoiceGate",30);
-        if(level>=gate){
-            if(recentVoice==0)recentVoice=now;
-            if(now-recentVoice>=300 && now-lastDuckAt>=2500){
-                setDuck(true);lastDuckAt=now;
-            }
-            handler.removeCallbacks(restoreVolume);
-            handler.postDelayed(restoreVolume,1500);
-        }else if(now-recentVoice>1600)recentVoice=0;
     }
     private void listen(){
         if(!enabled||listening||recording)return;
@@ -106,7 +84,7 @@ public class HandsFreeService extends Service {
         showNotification("Offline listening for Bookmark");
         detector=new OfflineBookmarkDetector(this,
             ()->{listening=false;capture();},
-            error->{listening=false;listeningState="Error: "+error;setDuck(false);showNotification("Microphone error: "+error);scheduleRestart();},
+            error->{listening=false;listeningState="Error: "+error;showNotification("Microphone error: "+error);scheduleRestart();},
             level->receivedLevel(level)
         );
         detector.start();
@@ -184,7 +162,6 @@ public class HandsFreeService extends Service {
         enabled=false;
         serviceActive=false;listeningState="Off";
         setDuck(false);
-        handler.removeCallbacks(restoreVolume);
         getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",false).apply();
         handler.removeCallbacks(restart);handler.removeCallbacks(monitor);
         if(detector!=null){detector.stop();detector=null;}
