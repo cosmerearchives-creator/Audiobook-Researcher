@@ -166,7 +166,7 @@ public class NowPlayingActivity extends Activity {
         // Keep a square regardless of artwork, scaled to fit both screen width
         // and the available vertical player space.
         middle.addOnLayoutChangeListener((v,left,top,right,bottom,oldLeft,oldTop,oldRight,oldBottom)->{
-            int side=Math.max(dp(160),Math.min(right-left-dp(12),bottom-top-dp(12)));
+            int side=Math.max(dp(64),Math.min(right-left-dp(12),bottom-top-dp(12)));
             FrameLayout.LayoutParams size=new FrameLayout.LayoutParams(side,side,Gravity.CENTER);
             coverButton.setLayoutParams(size);
         });
