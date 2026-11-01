@@ -992,10 +992,29 @@ public class MainActivity extends Activity {
         for(int i=0;i<candidates.size();i++)chosen[i]=BookOrganizer.indexOf(selected,candidates.get(i).uri)>=0;
         String[] labels=new String[candidates.size()];
         for(int i=0;i<candidates.size();i++)labels[i]=candidates.get(i).title+(candidates.get(i).album.isEmpty()?"":" ("+candidates.get(i).album+")");
-        TextView hint=text("Select parts, then use Arrange Parts to set their order.",13,false);layout.addView(hint);
+        TextView hint=text("Choose chapters, then tap Save Book. Arrange their order afterward.",13,false);
+        layout.addView(hint);
+        TextView count=text("0 selected",14,true);layout.addView(count);
+        Runnable recount=()->{
+            int n=0;for(boolean selectedPart:chosen)if(selectedPart)n++;
+            count.setText(n+" chapters selected");
+        };
+        recount.run();
+        android.widget.ScrollView scroller=new android.widget.ScrollView(this);
+        LinearLayout choices=new LinearLayout(this);choices.setOrientation(LinearLayout.VERTICAL);
+        for(int i=0;i<labels.length;i++){
+            final int index=i;
+            android.widget.CheckBox check=new android.widget.CheckBox(this);
+            check.setText(labels[i]);check.setChecked(chosen[i]);
+            check.setPadding(dp(4),dp(8),dp(4),dp(8));
+            check.setOnCheckedChangeListener((control,value)->{chosen[index]=value;recount.run();});
+            choices.addView(check);
+        }
+        scroller.addView(choices);
+        layout.addView(scroller,new LinearLayout.LayoutParams(-1,dp(350)));
         new android.app.AlertDialog.Builder(this).setTitle(existing==null?"Create Book":"Edit Book")
-            .setView(layout).setMultiChoiceItems(labels,chosen,(d,index,checked)->chosen[index]=checked)
-            .setPositiveButton("Continue",(d,w)->{
+            .setView(layout)
+            .setPositiveButton("Save Book",(d,w)->{
                 String title=name.getText().toString().trim();
                 if(title.isEmpty()){android.widget.Toast.makeText(this,"Enter a book title",android.widget.Toast.LENGTH_LONG).show();return;}
                 org.json.JSONArray picked=new org.json.JSONArray();
@@ -1014,6 +1033,7 @@ public class MainActivity extends Activity {
                     try{group.put("id",java.util.UUID.randomUUID().toString());}catch(Exception ignored){}
                 }
                 BookOrganizer.save(this,groups);
+                render();
                 arrangeParts(group);
             }).setNegativeButton("Cancel",null).show();
     }
