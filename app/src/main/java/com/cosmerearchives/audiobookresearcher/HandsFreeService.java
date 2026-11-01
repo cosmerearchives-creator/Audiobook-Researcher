@@ -5,6 +5,8 @@ import android.content.*;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.media.MediaRecorder;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.media.session.MediaSession;
 import android.os.*;
 import android.speech.*;
@@ -22,6 +24,14 @@ public class HandsFreeService extends Service {
     private MediaRecorder recorder;
     private File audioFile;
     private boolean enabled, listening, recording, heardVoice, resume;
+    private ToneGenerator readyTone;
+    private final Runnable delayedRecording=()->beginNoteRecording();
+    private void beepReady(){
+        try{
+            if(readyTone==null)readyTone=new ToneGenerator(AudioManager.STREAM_MUSIC,85);
+            readyTone.startTone(ToneGenerator.TONE_PROP_BEEP,180);
+        }catch(Exception ignored){}
+    }
     static volatile boolean serviceActive=false;
     static volatile String listeningState="Off";
     private long speechAt, recordingStart;
@@ -99,16 +109,23 @@ public class HandsFreeService extends Service {
         bookUri=playback.uri;timestamp=playback.position();resume=playback.isPlaying();
         android.content.SharedPreferences debug=getSharedPreferences("library",MODE_PRIVATE);
         debug.edit().putInt("wakeDetections",debug.getInt("wakeDetections",0)+1).apply();
-        if(debug.getBoolean("wakeTestMode",false)){
-            listening=false;
-            detector=null;
-            listeningState="Test phrase detected";
-            showNotification("Test detection succeeded • listening");scheduleRestart();return;
-        }
-        listeningState="Recording note";
-        playback.pause();
         if(detector!=null){detector.stop();detector=null;}
         listening=false;
+        if(debug.getBoolean("wakeTestMode",false)){
+            listeningState="Test phrase detected";
+            beepReady();
+            showNotification("Test detection succeeded • listening");
+            scheduleRestart();return;
+        }
+        listeningState="Ready for voice note";
+        playback.pause();
+        beepReady();
+        showNotification("Wake word detected • get ready to speak");
+        handler.postDelayed(delayedRecording,300);
+    }
+    private void beginNoteRecording(){
+        if(!enabled || recording)return;
+        listeningState="Recording note";
         File dir=new File(getFilesDir(),"voice_notes");
         if(!dir.exists()&&!dir.mkdirs()){endWithError();return;}
         audioFile=new File(dir,"handsfree_"+System.currentTimeMillis()+".m4a");
@@ -161,10 +178,11 @@ public class HandsFreeService extends Service {
         serviceActive=false;listeningState="Off";
         getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",false).apply();
         handler.removeCallbacks(restart);handler.removeCallbacks(monitor);
+        handler.removeCallbacks(delayedRecording);
         if(detector!=null){detector.stop();detector=null;}
         listening=false;
         if(recording)finishNote(false);
         stopForeground(STOP_FOREGROUND_REMOVE);
     }
-    @Override public void onDestroy(){shutdown();super.onDestroy();}
+    @Override public void onDestroy(){shutdown();if(readyTone!=null){readyTone.release();readyTone=null;}super.onDestroy();}
 }
