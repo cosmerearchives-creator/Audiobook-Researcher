@@ -33,12 +33,15 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.ProgressBar;
+import android.widget.ImageView;
+import android.graphics.BitmapFactory;
 import android.widget.TextView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private static final int PICK_AUDIO = 200;
+    private static final int PICK_COVER_FOLDER = 204;
     private static final int DICTATE_NOTE = 201;
     private static final int MIC_PERMISSION = 202;
     private static final int WAKE_PERMISSION = 203;
@@ -85,7 +88,7 @@ public class MainActivity extends Activity {
     private UpdateManager updater;
 
     private static class Book {
-        String uri, title; int position;
+        String uri, title, coverUri="", folderUri=""; int position;
         Book(String u, String t, int p) { uri=u; title=t; position=p; }
     }
 
@@ -158,7 +161,58 @@ public class MainActivity extends Activity {
         space(root,7);
         TextView sub = text("Your listening library",15,false);
         sub.setTextColor(0xFF807D77); root.addView(sub);
-        space(root,24);
+        space(root,12);
+        if(active!=null&&player!=null) {
+            LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
+            hero.setGravity(Gravity.CENTER);hero.setPadding(dp(14),dp(16),dp(14),dp(16));
+            hero.setBackground(shape(Color.WHITE,20,0xFFE0DDD8));
+            if(!active.coverUri.isEmpty()){
+                try{
+                    ImageView art=new ImageView(this);
+                    art.setImageURI(Uri.parse(active.coverUri));
+                    art.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                    art.setBackground(shape(0xFFEAE5EF,16,0));
+                    art.setClipToOutline(true);
+                    hero.addView(art,new LinearLayout.LayoutParams(-1,dp(210)));
+                    space(hero,12);
+                }catch(Exception ignored){}
+            }
+            TextView bookName=text(active.title,20,true);bookName.setGravity(Gravity.CENTER);
+            hero.addView(bookName);space(hero,10);
+            seek=new SeekBar(this);seek.setMax(Math.max(1,player.getDuration()));
+            seek.setProgress(active.position);seek.setProgressTintList(ColorStateList.valueOf(PURPLE));
+            hero.addView(seek);
+            seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+                public void onStartTrackingTouch(SeekBar bar){tracking=true;}
+                public void onProgressChanged(SeekBar bar,int p,boolean user){}
+                public void onStopTrackingTouch(SeekBar bar){tracking=false;seekTo(bar.getProgress());}
+            });
+            progress=text(format(active.position)+" / "+format(player.getDuration()),15,false);
+            progress.setGravity(Gravity.CENTER);hero.addView(progress);space(hero,14);
+            LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER);
+            TextView back=button("↶ 15",false);
+            playButton=button(player.isPlaying()?"❚❚  Pause":"▶  Play",true);
+            TextView forward=button("30 ↷",false);
+            TextView[] controlsArray={back,playButton,forward};
+            for(int n=0;n<3;n++){
+                LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(78),n==1?1.5f:1f);
+                params.setMargins(dp(3),0,dp(3),0);
+                controlsArray[n].setTextSize(n==1?19:17);
+                controls.addView(controlsArray[n],params);
+            }
+            back.setOnClickListener(v->seekTo(player.getCurrentPosition()-15000));
+            forward.setOnClickListener(v->seekTo(player.getCurrentPosition()+30000));
+            playButton.setOnClickListener(v->toggle());hero.addView(controls);
+            space(hero,12);
+            TextView coverButton=button(active.coverUri.isEmpty()?"Find cover in audiobook folder":"Change cover folder",false);
+            hero.addView(coverButton);
+            coverButton.setOnClickListener(v->{
+                Intent folder=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                folder.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                startActivityForResult(folder,PICK_COVER_FOLDER);
+            });
+            root.addView(hero);space(root,18);
+        }
         TextView importButton = button("+ Import audiobook",true);
         root.addView(importButton);
         importButton.setOnClickListener(v -> {
@@ -189,34 +243,6 @@ public class MainActivity extends Activity {
         }
         space(root,14);
         if (active != null && player != null) {
-            LinearLayout panel = new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL);
-            panel.setPadding(dp(16),dp(18),dp(16),dp(18));
-            panel.setBackground(shape(Color.WHITE,16,0xFFE0DDD8));
-            currentBook=text("NOW PLAYING  •  " + active.title,14,true); panel.addView(currentBook);
-            space(panel,12);
-            seek = new SeekBar(this); seek.setMax(Math.max(1,player.getDuration())); seek.setProgress(active.position);
-            seek.setProgressTintList(ColorStateList.valueOf(PURPLE));
-            panel.addView(seek);
-            seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-                public void onStartTrackingTouch(SeekBar bar){tracking=true;}
-                public void onProgressChanged(SeekBar bar,int p,boolean fromUser){}
-                public void onStopTrackingTouch(SeekBar bar){tracking=false;seekTo(bar.getProgress());}
-            });
-            progress=text(format(active.position)+" / "+format(player.getDuration()),13,false);
-            progress.setGravity(Gravity.CENTER); panel.addView(progress);
-            space(panel,15);
-            LinearLayout buttons = new LinearLayout(this); buttons.setGravity(Gravity.CENTER); buttons.setOrientation(LinearLayout.HORIZONTAL);
-            TextView back=button("−15s",false), forward=button("+30s",false);
-            playButton=button(player.isPlaying()?"Pause":"Play",true);
-            for(TextView control:new TextView[]{back,playButton,forward}) {
-                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0,dp(48),1);
-                p.setMargins(dp(3),0,dp(3),0); buttons.addView(control,p);
-            }
-            back.setOnClickListener(v->seekTo(player.getCurrentPosition()-15000));
-            forward.setOnClickListener(v->seekTo(player.getCurrentPosition()+30000));
-            playButton.setOnClickListener(v->toggle());
-            panel.addView(buttons); root.addView(panel);
-            space(root,14);
             TextView noteButton=button("+ Add bookmarked note",true);
             root.addView(noteButton);
             noteButton.setOnClickListener(v -> startNote());
@@ -451,7 +477,7 @@ public class MainActivity extends Activity {
         pendingPosition=player.getCurrentPosition();
         resumeAfterNote=player.isPlaying();
         if(resumeAfterNote){if(playback!=null)playback.pause();else player.pause();}
-        if(playButton!=null)playButton.setText("Play");
+        if(playButton!=null)playButton.setText("▶  Play");
         beginRecording();
     }
     private void startNote() {
@@ -586,7 +612,7 @@ public class MainActivity extends Activity {
     private void resumeAfterCapture() {
         if(resumeAfterNote && player!=null) {
             if(playback!=null)playback.play();else player.start();
-            if(playButton!=null)playButton.setText("Pause");
+            if(playButton!=null)playButton.setText("❚❚  Pause");
         }
         resumeAfterNote=false;
     }
@@ -613,7 +639,7 @@ public class MainActivity extends Activity {
     private void toggle() {
         if(player==null)return;
         if(playback!=null)playback.toggle();else if(player.isPlaying())player.pause();else player.start();
-        playButton.setText(player.isPlaying()?"Pause":"Play");saveBooks();
+        playButton.setText(player.isPlaying()?"❚❚  Pause":"▶  Play");saveBooks();
     }
     private void seekTo(int requested) {
         if(player==null)return;
@@ -642,6 +668,18 @@ public class MainActivity extends Activity {
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
+        if(request==PICK_COVER_FOLDER) {
+            if(result==RESULT_OK&&data!=null&&data.getData()!=null&&active!=null){
+                Uri folder=data.getData();
+                try{getContentResolver().takePersistableUriPermission(folder,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}
+                active.folderUri=folder.toString();
+                Uri cover=CoverArt.find(this,folder);
+                active.coverUri=cover==null?"":cover.toString();
+                saveBooks();render();
+                if(cover==null)new android.app.AlertDialog.Builder(this).setMessage("No JPG, PNG, or WEBP cover file found in the selected folder. Try selecting the folder containing the audiobook artwork.").setPositiveButton("OK",null).show();
+            }
+            return;
+        }
         if(request==DICTATE_NOTE) {
             if(result==RESULT_OK && data!=null) {
                 ArrayList<String> resultText=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
@@ -665,7 +703,9 @@ public class MainActivity extends Activity {
             JSONArray items=new JSONArray(prefs.getString("books","[]"));
             for(int i=0;i<items.length();i++){
                 JSONObject o=items.getJSONObject(i);
-                books.add(new Book(o.getString("uri"),o.getString("title"),o.optInt("position",0)));
+                Book b=new Book(o.getString("uri"),o.getString("title"),o.optInt("position",0));
+                b.coverUri=o.optString("coverUri","");b.folderUri=o.optString("folderUri","");
+                books.add(b);
             }
         }catch(Exception ignored){}
     }
@@ -673,6 +713,7 @@ public class MainActivity extends Activity {
         JSONArray items=new JSONArray();
         for(Book b:books){JSONObject item=new JSONObject();try{
             item.put("uri",b.uri);item.put("title",b.title);item.put("position",b.position);
+            item.put("coverUri",b.coverUri);item.put("folderUri",b.folderUri);
         }catch(Exception ignored){}items.put(item);}
         prefs.edit().putString("books",items.toString()).apply();
     }
