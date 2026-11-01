@@ -24,11 +24,6 @@ public class PlaybackService extends Service {
     private AudioManager audio;
     private AudioManager.OnAudioFocusChangeListener focusListener;
     private boolean resumeOnFocus;
-    private float handsFreeVolume=1f;
-    void setHandsFreeDuck(boolean duck){
-        handsFreeVolume=duck?0.2f:1f;
-        if(player!=null)player.setVolume(handsFreeVolume,handsFreeVolume);
-    }
     class LocalBinder extends Binder { PlaybackService service(){return PlaybackService.this;} }
 
     @Override public void onCreate() {
@@ -83,7 +78,6 @@ public class PlaybackService extends Service {
             next.seekTo(Math.min(Math.max(0,at),next.getDuration()));
             next.setOnCompletionListener(p->{pause();seek(0);});
             player=next;
-            next.setVolume(handsFreeVolume,handsFreeVolume);
             play();
         }catch(Exception ex){next.release();throw ex;}
     }
