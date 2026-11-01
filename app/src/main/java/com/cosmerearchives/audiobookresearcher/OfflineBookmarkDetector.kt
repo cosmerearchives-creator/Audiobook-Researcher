@@ -8,6 +8,8 @@ import android.os.Handler
 import android.os.Looper
 import com.k2fsa.sherpa.onnx.*
 import kotlin.concurrent.thread
+import org.json.JSONObject
+import java.util.Locale
 
 /** Single-purpose, offline 16 kHz Bookmark detector. */
 class OfflineBookmarkDetector(private val context: Context, private val onDetected: Runnable, private val onError: java.util.function.Consumer<String>) {
@@ -40,7 +42,10 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                     keywordsThreshold = 0.25f
                 )
                 spotter = KeywordSpotter(assetManager = context.assets, config = config)
-                stream = spotter.createStream()
+                val phrase = context.getSharedPreferences("library", Context.MODE_PRIVATE)
+                    .getString("wakePhrase", "Hey Bookmark") ?: "Hey Bookmark"
+                val tokens = tokenizePhrase(phrase, dir)
+                stream = spotter.createStream(tokens.joinToString(" ") + " @" + phrase.uppercase(Locale.ROOT).replace(" ", "_"))
                 val size = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 require(size > 0) { "No compatible microphone buffer" }
                 val mic = AudioRecord(MediaRecorder.AudioSource.MIC, 16000,
@@ -76,6 +81,32 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                 if (detected) main.post { onDetected.run() }
             }
         }
+    }
+    private fun tokenizePhrase(phrase: String, directory: String): List<String> {
+        val json = context.assets.open("$directory/bpe-vocab.json").bufferedReader().use { JSONObject(it.readText()) }
+        val words = phrase.lowercase(Locale.ROOT).trim().split(Regex("\\s+"))
+        val output = mutableListOf<String>()
+        for (word in words) {
+            val chars = ("▁" + word).map { it.toString() }.toMutableList()
+            // SentencePiece BPE merges highest-score adjacent candidate first.
+            while (chars.size > 1) {
+                var bestIndex = -1
+                var bestScore = Double.NEGATIVE_INFINITY
+                for (i in 0 until chars.size - 1) {
+                    val candidate = chars[i] + chars[i + 1]
+                    if (!json.has(candidate)) continue
+                    val score = json.optDouble(candidate, Double.NEGATIVE_INFINITY)
+                    if (score > bestScore) { bestIndex = i; bestScore = score }
+                }
+                if (bestIndex < 0) break
+                chars[bestIndex] += chars[bestIndex + 1]
+                chars.removeAt(bestIndex + 1)
+            }
+            require(chars.all { json.has(it) }) { "Wake phrase contains unsupported letters" }
+            output.addAll(chars)
+        }
+        require(output.isNotEmpty()) { "Wake phrase cannot be empty" }
+        return output
     }
     fun stop() {
         running = false
