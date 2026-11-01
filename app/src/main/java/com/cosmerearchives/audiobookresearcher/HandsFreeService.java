@@ -22,6 +22,8 @@ public class HandsFreeService extends Service {
     private MediaRecorder recorder;
     private File audioFile;
     private boolean enabled, listening, recording, heardVoice, resume;
+    static volatile boolean serviceActive=false;
+    static volatile String listeningState="Off";
     private long speechAt, recordingStart;
     private String bookUri;
     private int timestamp;
@@ -51,6 +53,7 @@ public class HandsFreeService extends Service {
                 stopSelf();return START_NOT_STICKY;
             }
             enabled=true;
+            serviceActive=true;listeningState="Starting";
             getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",true).apply();
             showNotification("Offline listening for Bookmark");
             listen();
@@ -99,10 +102,11 @@ public class HandsFreeService extends Service {
     private void listen(){
         if(!enabled||listening||recording)return;
         listening=true;
+        listeningState="Listening";
         showNotification("Offline listening for Bookmark");
         detector=new OfflineBookmarkDetector(this,
             ()->{listening=false;capture();},
-            error->{listening=false;setDuck(false);showNotification("Microphone error: "+error);scheduleRestart();},
+            error->{listening=false;listeningState="Error: "+error;setDuck(false);showNotification("Microphone error: "+error);scheduleRestart();},
             level->receivedLevel(level)
         );
         detector.start();
@@ -119,8 +123,12 @@ public class HandsFreeService extends Service {
         android.content.SharedPreferences debug=getSharedPreferences("library",MODE_PRIVATE);
         debug.edit().putInt("wakeDetections",debug.getInt("wakeDetections",0)+1).apply();
         if(debug.getBoolean("wakeTestMode",false)){
+            listening=false;
+            detector=null;
+            listeningState="Test phrase detected";
             showNotification("Test detection succeeded • listening");scheduleRestart();return;
         }
+        listeningState="Recording note";
         playback.pause();
         if(detector!=null){detector.stop();detector=null;}
         listening=false;
@@ -167,12 +175,14 @@ public class HandsFreeService extends Service {
         if(resume&&p!=null)p.play();
         resume=false;
         if(enabled){
+            listeningState="Restarting";
             showNotification(keep&&valid?"Bookmark saved • listening":"Listening for Bookmark");
             scheduleRestart();
         }
     }
     private void shutdown(){
         enabled=false;
+        serviceActive=false;listeningState="Off";
         setDuck(false);
         handler.removeCallbacks(restoreVolume);
         getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",false).apply();
