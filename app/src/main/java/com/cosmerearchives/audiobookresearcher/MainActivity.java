@@ -167,6 +167,14 @@ public class MainActivity extends Activity {
             nowPlaying.setTextSize(19);
             root.addView(nowPlaying,new LinearLayout.LayoutParams(-1,dp(78)));
             nowPlaying.setOnClickListener(v->startActivity(new Intent(this,NowPlayingActivity.class)));
+            space(root,10);
+            TextView coverSelect=button(active.coverUri.isEmpty()?"Select audiobook artwork folder":"Change artwork folder",false);
+            root.addView(coverSelect);
+            coverSelect.setOnClickListener(v->{
+                Intent folder=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                folder.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+                startActivityForResult(folder,PICK_COVER_FOLDER);
+            });
             space(root,18);
         }
         TextView importButton = button("+ Import audiobook",true);
