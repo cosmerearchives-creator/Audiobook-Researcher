@@ -102,3 +102,16 @@ restarts. It does not request whole-device storage permissions. Artwork folder
 selection is not intended to be performed while driving.
 
 These source changes still require CI and real-device verification.
+
+
+## Player-first navigation
+
+The app opens the last selected audiobook in the dedicated full-screen Now Playing
+screen (paused if it must restore the book into a new PlaybackService). The
+top-left hamburger opens navigation to **Media Library**, **Notes**, and
+**Options**. The top-right microphone icon starts/stops the hands-free service;
+all wake phrase, sensitivity, microphone diagnostics, and test settings live
+under Options. Notes have their own screen, including an Add note action.
+No automatic audiobook playback-volume reduction remains; wake detection still
+monitors the microphone at normal audiobook volume.
+The library is shown when no audiobook can be restored.
