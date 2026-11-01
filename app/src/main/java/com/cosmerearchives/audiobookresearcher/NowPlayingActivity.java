@@ -117,10 +117,10 @@ public class NowPlayingActivity extends Activity {
         TextView menu=label("☰",31,true);menu.setContentDescription("Open navigation menu");
         top.addView(menu,new LinearLayout.LayoutParams(dp(64),dp(64)));
         menu.setOnClickListener(v->{
-            final String[] items={"Media Library","Notes","Options"};
+            final String[] items={"Media Library","Notes","Options","Tools"};
             new android.app.AlertDialog.Builder(this).setTitle("Audiobook Researcher")
                 .setItems(items,(dialog,which)->{
-                    String section=which==0?"library":which==1?"notes":"options";
+                    String section=which==0?"library":which==1?"notes":which==2?"options":"tools";
                     startActivity(new Intent(this,MainActivity.class).putExtra("section",section));
                     finish();
                 }).show();
