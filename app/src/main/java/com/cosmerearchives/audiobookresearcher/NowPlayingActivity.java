@@ -99,7 +99,7 @@ public class NowPlayingActivity extends Activity {
         audioManager=(AudioManager)getSystemService(AUDIO_SERVICE);
         playback=PlaybackService.instance;
         if(playback==null||playback.player==null){
-            startActivity(new Intent(this,MainActivity.class).putExtra("section","library"));
+            android.widget.Toast.makeText(this,"No audiobook session is loaded",android.widget.Toast.LENGTH_SHORT).show();
             finish();return;
         }
         displayedUri=playback.uri;
