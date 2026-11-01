@@ -247,41 +247,29 @@ public class MainActivity extends Activity {
         space(root,15);
         TextView heading = text("Audiobook Researcher", 28, true); root.addView(heading);
         space(root,7);
-        TextView sub = text(section.equals("notes")?"Your bookmarked notes":section.equals("options")?"App & voice activation settings":section.equals("tools")?"Diagnostics and utilities":"Your listening library",15,false);
+        TextView sub = text(section.equals("notes")?"Your bookmarked notes":section.equals("options")?"App & voice activation settings":section.equals("tools")?"Diagnostics and utilities":section.equals("mediaGallery")?"Audiobook folder and artwork settings":"Your listening library",15,false);
         sub.setTextColor(0xFF807D77); root.addView(sub);
         space(root,12);
         if(section.equals("library")){
-        if(active!=null&&player!=null){
-            TextView nowPlaying=button("▶  Return to full-screen player",true);
-            nowPlaying.setTextSize(19);
-            root.addView(nowPlaying,new LinearLayout.LayoutParams(-1,dp(78)));
-            nowPlaying.setOnClickListener(v->startActivity(new Intent(this,NowPlayingActivity.class)));
-            space(root,10);
-            TextView coverSelect=button(active.coverUri.isEmpty()?"Select audiobook artwork folder":"Change artwork folder",false);
-            root.addView(coverSelect);
-            coverSelect.setOnClickListener(v->{
-                Intent folder=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-                folder.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-                startActivityForResult(folder,PICK_COVER_FOLDER);
-            });
-            space(root,18);
-        }
-        TextView importButton=button(prefs.getString("audiobookFolder","").isEmpty()?
-            "Choose Audiobooks folder":"Change Audiobooks folder",true);
-        root.addView(importButton);
-        importButton.setOnClickListener(v->{
-            Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-            startActivityForResult(intent,PICK_AUDIOBOOK_FOLDER);
+        LinearLayout headingRow=new LinearLayout(this);
+        headingRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView libraryTitle=text("Your books",21,true);
+        headingRow.addView(libraryTitle,new LinearLayout.LayoutParams(0,-2,1));
+        TextView refresh=button("↻",false);
+        refresh.setTextSize(23);
+        refresh.setContentDescription("Rescan Audiobooks folder");
+        headingRow.addView(refresh,new LinearLayout.LayoutParams(dp(58),dp(54)));
+        root.addView(headingRow);
+        refresh.setOnClickListener(v->{
+            String saved=prefs.getString("audiobookFolder","");
+            if(saved.isEmpty()){
+                android.widget.Toast.makeText(this,"Choose an Audiobooks folder under Options → Media Gallery",android.widget.Toast.LENGTH_LONG).show();
+                return;
+            }
+            refresh.setText("…");
+            refresh.setEnabled(false);
+            scanAudiobookFolder(Uri.parse(saved));
         });
-        space(root,10);
-        if(!prefs.getString("audiobookFolder","").isEmpty()){
-            TextView scanButton=button("↻  Scan Audiobooks folder",false);
-            root.addView(scanButton);
-            scanButton.setOnClickListener(v->scanAudiobookFolder(Uri.parse(prefs.getString("audiobookFolder",""))));
-        }
-        space(root,22);
-        TextView libraryTitle = text("Your books",21,true); root.addView(libraryTitle);
         space(root,12);
         if (books.isEmpty()) {
             TextView empty = text("No audiobooks yet. Import an MP3, M4B, or another audio file to start listening.",15,false);
@@ -323,6 +311,38 @@ public class MainActivity extends Activity {
             addBookGroup(root,entry.getKey(),name,parts,false,null);
         }
         space(root,14);
+        }
+        if(section.equals("options")){
+        TextView mediaGallery=button("Media Gallery  ›",false);
+        root.addView(mediaGallery);space(root,12);
+        mediaGallery.setOnClickListener(v->{
+            section="mediaGallery";
+            render();
+        });
+        }
+        if(section.equals("mediaGallery")){
+        TextView mediaTitle=text("Media Gallery",21,true);
+        root.addView(mediaTitle);space(root,12);
+        TextView artwork=button(active!=null&&!active.coverUri.isEmpty()?"Change artwork folder":"Select audiobook artwork folder",false);
+        root.addView(artwork);
+        artwork.setOnClickListener(v->{
+            if(active==null){android.widget.Toast.makeText(this,"Select a book first to set its artwork folder",android.widget.Toast.LENGTH_LONG).show();return;}
+            Intent folder=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            folder.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(folder,PICK_COVER_FOLDER);
+        });
+        space(root,10);
+        TextView audiobooks=button(prefs.getString("audiobookFolder","").isEmpty()?"Choose Audiobooks folder":"Change Audiobooks folder",true);
+        root.addView(audiobooks);
+        audiobooks.setOnClickListener(v->{
+            Intent folder=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            folder.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(folder,PICK_AUDIOBOOK_FOLDER);
+        });
+        space(root,12);
+        TextView optionsBack=button("‹ Back to Options",false);
+        root.addView(optionsBack);
+        optionsBack.setOnClickListener(v->{section="options";render();});
         }
         if(section.equals("options")){
         {
