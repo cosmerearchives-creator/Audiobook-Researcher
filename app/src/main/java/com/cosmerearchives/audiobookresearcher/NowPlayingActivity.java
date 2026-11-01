@@ -79,6 +79,17 @@ public class NowPlayingActivity extends Activity {
         handsFreeStatus=label("Voice detection: checking…",14,true);
         handsFreeStatus.setTextColor(0xFFFFFFFF);
         column.addView(handsFreeStatus,new LinearLayout.LayoutParams(-1,dp(44)));
+        handsFreeStatus.setOnClickListener(v->{
+            if(HandsFreeService.serviceActive){
+                stopService(new Intent(this,HandsFreeService.class));
+            }else if(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED){
+                try{startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));}
+                catch(Exception e){android.widget.Toast.makeText(this,"Cannot start microphone: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
+            }else{
+                android.widget.Toast.makeText(this,"Enable microphone permission from the Library screen",android.widget.Toast.LENGTH_LONG).show();
+            }
+            handler.postDelayed(this::refresh,350);
+        });
         FrameLayout middle=new FrameLayout(this);
         column.addView(middle,new LinearLayout.LayoutParams(-1,0,1));
         play=label(playback.isPlaying()?"❚❚":"▶",96,true);
@@ -119,7 +130,7 @@ public class NowPlayingActivity extends Activity {
         PlaybackService p=PlaybackService.instance;
         if(p==null||p.player==null){finish();return;}
         if(play!=null)play.setText(p.isPlaying()?"❚❚":"▶");
-        if(handsFreeStatus!=null)handsFreeStatus.setText("Voice detection: "+(HandsFreeService.serviceActive?HandsFreeService.listeningState:"Off — enable in Library"));
+        if(handsFreeStatus!=null)handsFreeStatus.setText("Voice detection: "+(HandsFreeService.serviceActive?HandsFreeService.listeningState+" • tap to stop":"Off • tap to start"));
         if(elapsed!=null)elapsed.setText(format(p.position()));
         if(remaining!=null)remaining.setText(format(p.duration()));
         if(seek!=null&&!dragging){seek.setMax(Math.max(1,p.duration()));seek.setProgress(p.position());}
