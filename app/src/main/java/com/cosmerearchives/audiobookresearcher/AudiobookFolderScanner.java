@@ -3,6 +3,7 @@ package com.cosmerearchives.audiobookresearcher;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
+import android.media.MediaMetadataRetriever;
 import android.provider.DocumentsContract;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -12,8 +13,8 @@ import java.util.Locale;
 /** Recursively discovers audiobook audio documents in a user-granted SAF tree. */
 final class AudiobookFolderScanner {
     static final class Found {
-        final String uri,title,folderUri,coverUri;
-        Found(String u,String t,String f,String c){uri=u;title=t;folderUri=f;coverUri=c;}
+        final String uri,title,folderUri,coverUri,album,artist,track;
+        Found(String u,String t,String f,String c,String a,String artistName,String tr){uri=u;title=t;folderUri=f;coverUri=c;album=a;artist=artistName;track=tr;}
     }
     static ArrayList<Found> scan(Context context, Uri tree) {
         ArrayList<Found> found=new ArrayList<>();
@@ -56,7 +57,21 @@ final class AudiobookFolderScanner {
             String directoryUri=DocumentsContract.buildDocumentUriUsingTree(tree,id).toString();
             for(String[] file:audio){
                 String uri=DocumentsContract.buildDocumentUriUsingTree(tree,file[0]).toString();
-                found.add(new Found(uri,file[1],directoryUri,cover));
+                String album="",artist="",track="",title=file[1];
+                MediaMetadataRetriever retriever=new MediaMetadataRetriever();
+                try{
+                    retriever.setDataSource(context,Uri.parse(uri));
+                    String a=retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM);
+                    String t=retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE);
+                    String ar=retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST);
+                    String tr=retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER);
+                    if(a!=null)album=a.trim();
+                    if(t!=null&&!t.trim().isEmpty())title=t.trim();
+                    if(ar!=null)artist=ar.trim();
+                    if(tr!=null)track=tr.trim();
+                }catch(Exception ignored){}
+                finally{try{retriever.release();}catch(Exception ignored){}}
+                found.add(new Found(uri,title,directoryUri,cover,album,artist,track));
             }
         }
         return found;
