@@ -24,7 +24,7 @@ import org.json.JSONObject;
 public class NowPlayingActivity extends Activity {
     private static final int PURPLE=0xFF7F64B7;
     private PlaybackService playback;
-    private TextView play,elapsed,remaining;
+    private TextView play,elapsed,remaining,handsFreeStatus;
     private SeekBar seek;
     private boolean dragging;
     private final Handler handler=new Handler(Looper.getMainLooper());
@@ -76,6 +76,9 @@ public class NowPlayingActivity extends Activity {
         column.addView(title,new LinearLayout.LayoutParams(-1,dp(70)));
         TextView chapter=label("NOW PLAYING",14,false);
         chapter.setTextColor(0xFFDCD2F6);column.addView(chapter);
+        handsFreeStatus=label("Voice detection: checking…",14,true);
+        handsFreeStatus.setTextColor(0xFFFFFFFF);
+        column.addView(handsFreeStatus,new LinearLayout.LayoutParams(-1,dp(44)));
         FrameLayout middle=new FrameLayout(this);
         column.addView(middle,new LinearLayout.LayoutParams(-1,0,1));
         play=label(playback.isPlaying()?"❚❚":"▶",96,true);
@@ -116,6 +119,7 @@ public class NowPlayingActivity extends Activity {
         PlaybackService p=PlaybackService.instance;
         if(p==null||p.player==null){finish();return;}
         if(play!=null)play.setText(p.isPlaying()?"❚❚":"▶");
+        if(handsFreeStatus!=null)handsFreeStatus.setText("Voice detection: "+(HandsFreeService.serviceActive?HandsFreeService.listeningState:"Off — enable in Library"));
         if(elapsed!=null)elapsed.setText(format(p.position()));
         if(remaining!=null)remaining.setText(format(p.duration()));
         if(seek!=null&&!dragging){seek.setMax(Math.max(1,p.duration()));seek.setProgress(p.position());}
