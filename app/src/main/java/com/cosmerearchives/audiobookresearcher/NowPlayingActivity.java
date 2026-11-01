@@ -30,6 +30,7 @@ import org.json.JSONObject;
 public class NowPlayingActivity extends Activity {
     private static final int PURPLE=0xFF7F64B7;
     private PlaybackService playback;
+    private String displayedUri="";
     private TextView play,elapsed,remaining,microphone;
     private SeekBar seek;
     private boolean dragging;
@@ -101,6 +102,7 @@ public class NowPlayingActivity extends Activity {
             startActivity(new Intent(this,MainActivity.class).putExtra("section","library"));
             finish();return;
         }
+        displayedUri=playback.uri;
         FrameLayout screen=new FrameLayout(this);screen.setBackgroundColor(PURPLE);
         String cover=coverFor(playback.uri);
         if(!cover.isEmpty()){
@@ -242,6 +244,7 @@ public class NowPlayingActivity extends Activity {
     private void refresh(){
         PlaybackService p=PlaybackService.instance;
         if(p==null||p.player==null){finish();return;}
+        if(!displayedUri.equals(p.uri)){recreate();return;}
         if(play!=null)play.setText(p.isPlaying()?"❚❚":"▶");
         if(microphone!=null){
             boolean enabled=HandsFreeService.serviceActive;
