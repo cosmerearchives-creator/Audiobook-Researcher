@@ -291,9 +291,6 @@ public class MainActivity extends Activity {
         if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},WAKE_PERMISSION);return;
         }
-        if(!SpeechRecognizer.isRecognitionAvailable(this)){
-            new android.app.AlertDialog.Builder(this).setMessage("No speech recognition service is installed.").setPositiveButton("OK",null).show();return;
-        }
         try{
             startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));
             backgroundHandsFree=true;
