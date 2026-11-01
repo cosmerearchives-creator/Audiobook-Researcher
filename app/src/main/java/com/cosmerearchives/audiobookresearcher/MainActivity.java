@@ -221,6 +221,14 @@ public class MainActivity extends Activity {
             root.addView(noteButton);
             noteButton.setOnClickListener(v -> startNote());
             space(root,10);
+            TextView phraseTitle=text("Wake phrase",17,true);
+            root.addView(phraseTitle);
+            space(root,5);
+            String phrase=prefs.getString("wakePhrase","Hey Bookmark");
+            TextView phraseButton=button("“"+phrase+"”  •  Edit phrase",false);
+            root.addView(phraseButton);
+            phraseButton.setOnClickListener(v->editWakePhrase());
+            space(root,10);
             wakeToggle=button(backgroundHandsFree?"Stop hands-free mode":"Start hands-free mode (experimental)",false);
             root.addView(wakeToggle);
             wakeToggle.setOnClickListener(v->{
@@ -286,6 +294,35 @@ public class MainActivity extends Activity {
         updateButton.setOnClickListener(v->updater.check());
         updater.check();
         setContentView(scroll);
+    }
+    private void editWakePhrase(){
+        EditText input=new EditText(this);
+        input.setSingleLine(true);
+        input.setText(prefs.getString("wakePhrase","Hey Bookmark"));
+        input.setSelection(input.length());
+        LinearLayout wrapper=new LinearLayout(this);
+        wrapper.setPadding(dp(20),dp(10),dp(20),0);wrapper.addView(input);
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Custom wake phrase")
+            .setMessage("Try a distinctive 2–4 word phrase to reduce false activations. Changes apply when listening restarts.")
+            .setView(wrapper)
+            .setPositiveButton("Save",(dialog,which)->{
+                String phrase=input.getText().toString().trim().replaceAll("\\s+"," ");
+                if(!phrase.matches("[A-Za-z]+(?: [A-Za-z]+){0,4}")){
+                    new android.app.AlertDialog.Builder(this)
+                        .setMessage("Use 1–5 English words containing letters only.")
+                        .setPositiveButton("OK",null).show();
+                    return;
+                }
+                prefs.edit().putString("wakePhrase",phrase).apply();
+                if(backgroundHandsFree){
+                    stopService(new Intent(this,HandsFreeService.class));
+                    backgroundHandsFree=false;
+                    prefs.edit().putBoolean("backgroundHandsFree",false).apply();
+                }
+                render();
+            })
+            .setNegativeButton("Cancel",null).show();
     }
     private void startBackgroundHandsFree(){
         if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
