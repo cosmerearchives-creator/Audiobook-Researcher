@@ -19,3 +19,10 @@ if not pieces or any(piece in ("<unk>","<s>","</s>") for piece in pieces):
 args.output.parent.mkdir(parents=True,exist_ok=True)
 args.output.write_text(" ".join(pieces)+" @BOOKMARK\n",encoding="utf-8")
 print("Generated BOOKMARK keyword pieces:",pieces)
+
+# Compact on-device BPE vocabulary and piece scores for user-editable phrases.
+# This permits re-tokenizing a new wake phrase without building a new APK.
+import json
+vocab = {model.id_to_piece(i): model.get_score(i) for i in range(model.get_piece_size())}
+(args.output.parent / "bpe-vocab.json").write_text(
+    json.dumps(vocab, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
