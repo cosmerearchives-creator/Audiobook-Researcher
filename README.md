@@ -49,3 +49,23 @@ This is an experimental integration, **not** a promise of reliable hands-free op
 The current source now attempts to use the sherpa-onnx v2.0.1 Android AAR and the English GigaSpeech Zipformer keyword-spotting model, with a generated BOOKMARK keyword file. The Android build workflow downloads these files and checks the published AAR SHA-256. The hands-free microphone service has been connected to a Kotlin AudioRecord/KeywordSpotter bridge rather than repeating Android SpeechRecognizer sessions. The bridge releases the microphone before starting the AAC/M4A note recorder.
 
 **Verification status:** Source changes are pushed; CI compilation, APK installation, native loading, real-time detection and background/lock-screen behavior must still be confirmed. No reliability claims are made. The legacy foreground SpeechRecognizer code still exists in MainActivity but is not used by the Hands-Free Mode button. Note transcription and spoken Save note remain incomplete.
+
+## User-configurable wake phrases
+
+The player now includes **Wake phrase → Edit phrase** under the audiobook controls.
+Choose an English phrase of 1–5 words; it is stored locally in the existing
+`library` SharedPreferences. The default is **Hey Bookmark** rather than a
+single-word trigger to reduce accidental activations during narration.
+Saving a new phrase stops the current listening session if one is active.
+Tap **Start hands-free mode** to start listening with the newly selected phrase.
+
+At APK build time, `scripts/make-bookmark-keyword.py` exports the English
+SentencePiece BPE piece-score vocabulary alongside the model. At runtime,
+`OfflineBookmarkDetector` tokenizes the user's new phrase and passes the
+tokenized sequence to sherpa-onnx `KeywordSpotter.createStream(...)`.
+No new APK or cloud service is intended for subsequent phrase edits.
+
+**Testing required:** Verify the generated token sequences match the chosen
+sherpa model and confirm live microphone detection, false-trigger rates,
+background listening, and the GitHub Actions build on a device. This feature
+has been pushed but has not yet been verified as a working signed APK.
