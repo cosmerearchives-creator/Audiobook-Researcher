@@ -76,7 +76,20 @@ public class MainActivity extends Activity {
     private final android.content.ServiceConnection serviceConnection=new android.content.ServiceConnection(){
         @Override public void onServiceConnected(android.content.ComponentName name,android.os.IBinder binder){
             playback=((PlaybackService.LocalBinder)binder).service();bound=true;
-            if(playback.player!=null){player=playback.player;for(Book book:books)if(book.uri.equals(playback.uri)){active=book;break;}render();if(getIntent().getBooleanExtra("openPlayer",false))startActivity(new Intent(MainActivity.this,NowPlayingActivity.class));}
+            boolean launchPlayer=getIntent().getBooleanExtra("openPlayer",false) || !getIntent().hasExtra("section");
+            if(playback.player==null&&launchPlayer&&!books.isEmpty()){
+                try{
+                    Book book=books.get(0);active=book;
+                    playback.open(book.uri,book.title,book.position);
+                    playback.pause();
+                }catch(Exception ignored){}
+            }
+            if(playback.player!=null){
+                player=playback.player;
+                for(Book book:books)if(book.uri.equals(playback.uri)){active=book;break;}
+                render();
+                if(launchPlayer)startActivity(new Intent(MainActivity.this,NowPlayingActivity.class));
+            }
         }
         @Override public void onServiceDisconnected(android.content.ComponentName name){bound=false;playback=null;player=null;}
     };
