@@ -526,15 +526,45 @@ public class MainActivity extends Activity {
             .setOnCancelListener(d->handler.removeCallbacks(refresh[0])).show();
     }
     private void editWakePhrase(){
+        java.util.LinkedHashSet<String> suggestions=new java.util.LinkedHashSet<>();
+        try(java.io.BufferedReader reader=new java.io.BufferedReader(new java.io.InputStreamReader(
+                getAssets().open("sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/keywords.txt")))){
+            String line;
+            while((line=reader.readLine())!=null){
+                line=line.trim();
+                if(line.isEmpty()||line.startsWith("#"))continue;
+                int tag=line.lastIndexOf('@');
+                if(tag<0)continue;
+                String phrase=line.substring(tag+1).trim().replace('_',' ');
+                if(phrase.matches("[A-Za-z]+(?: [A-Za-z]+){0,4}"))suggestions.add(phrase);
+            }
+        }catch(Exception e){android.util.Log.w("WakePhrase","Bundled phrases unavailable",e);}
         EditText input=new EditText(this);
         input.setSingleLine(true);
+        input.setHint("Or type a custom wake phrase");
         input.setText(prefs.getString("wakePhrase","Hey Bookmark"));
         input.setSelection(input.length());
         LinearLayout wrapper=new LinearLayout(this);
-        wrapper.setPadding(dp(20),dp(10),dp(20),0);wrapper.addView(input);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+        wrapper.setPadding(dp(20),dp(10),dp(20),0);
+        if(!suggestions.isEmpty()){
+            TextView caption=text("Bundled quick choices (not necessarily more accurate):",14,true);
+            wrapper.addView(caption);
+            TextView choose=button("Choose a bundled phrase  ▾",false);
+            wrapper.addView(choose);
+            String[] options=suggestions.toArray(new String[0]);
+            choose.setOnClickListener(v->new android.app.AlertDialog.Builder(this)
+                .setTitle("Bundled wake phrases")
+                .setItems(options,(dialog,index)->{
+                    input.setText(options[index]);
+                    input.setSelection(input.length());
+                }).show());
+            space(wrapper,10);
+        }
+        wrapper.addView(input);
         new android.app.AlertDialog.Builder(this)
-            .setTitle("Custom wake phrase")
-            .setMessage("Try a distinctive 2–4 word phrase to reduce false activations. Changes apply when listening restarts.")
+            .setTitle("Wake phrase")
+            .setMessage("Choose a bundled phrase or enter your own. Recognition quality can vary; test the phrase before relying on it.")
             .setView(wrapper)
             .setPositiveButton("Save",(dialog,which)->{
                 String phrase=input.getText().toString().trim().replaceAll("\\s+"," ");
