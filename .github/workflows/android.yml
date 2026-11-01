@@ -30,6 +30,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: scripts/requirements-wake.txt
       - name: Prepare offline Bookmark engine
         run: |
           set -euo pipefail
@@ -38,7 +43,7 @@ jobs:
           echo "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7  app/libs/sherpa-onnx.aar" | sha256sum -c -
           curl -fL --retry 3 -o "$RUNNER_TEMP/kws-model.tar.bz2" https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2
           tar -xjf "$RUNNER_TEMP/kws-model.tar.bz2" -C app/src/main/assets
-          python -m pip install --disable-pip-version-check sentencepiece==0.2.0
+          python -m pip install --disable-pip-version-check --only-binary=:all: sentencepiece==0.2.0
           python scripts/make-bookmark-keyword.py app/src/main/assets/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/bpe.model app/src/main/assets/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/keywords.txt
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
