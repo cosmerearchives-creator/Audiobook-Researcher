@@ -211,7 +211,9 @@ public class MainActivity extends Activity {
                 folder.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
                 startActivityForResult(folder,PICK_COVER_FOLDER);
             });
-            root.addView(hero);space(root,18);
+            TextView full=button("Open full-screen player",true);
+            full.setOnClickListener(v->startActivity(new Intent(this,NowPlayingActivity.class)));
+            hero.addView(full);root.addView(hero);space(root,18);
         }
         TextView importButton = button("+ Import audiobook",true);
         root.addView(importButton);
@@ -658,6 +660,7 @@ public class MainActivity extends Activity {
             else playback.open(book.uri,book.title,book.position);
             player=playback.player;
             render();
+            startActivity(new Intent(this,NowPlayingActivity.class));
         }catch(Exception ex){
             new android.app.AlertDialog.Builder(this).setTitle("Unable to open audiobook").setMessage(ex.getMessage()).setPositiveButton("OK",null).show();
         }
