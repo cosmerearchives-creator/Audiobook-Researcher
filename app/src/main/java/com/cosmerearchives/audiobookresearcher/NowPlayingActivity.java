@@ -190,7 +190,25 @@ public class NowPlayingActivity extends Activity {
         PlaybackService p=PlaybackService.instance;
         if(p==null||p.player==null){finish();return;}
         if(play!=null)play.setText(p.isPlaying()?"❚❚":"▶");
-        if(microphone!=null){microphone.setAlpha(HandsFreeService.serviceActive?1f:.55f);microphone.setContentDescription(HandsFreeService.serviceActive?"Voice activation on. Tap to stop.":"Voice activation off. Tap to start.");}
+        if(microphone!=null){
+            boolean enabled=HandsFreeService.serviceActive;
+            microphone.setAlpha(1f);
+            microphone.setText(enabled?"🎙":"🎙");
+            microphone.setContentDescription(enabled?"Voice activation on. Tap to stop.":"Voice activation off. Tap to start.");
+            microphone.setCompoundDrawablesWithIntrinsicBounds(0,0,0,0);
+            microphone.setForeground(enabled?null:new android.graphics.drawable.Drawable(){
+                private final android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                @Override public void draw(android.graphics.Canvas canvas){
+                    paint.setColor(0xFFFF3B30);paint.setStrokeWidth(dp(5));paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                    float x=getBounds().centerX(),y=getBounds().centerY(),size=dp(17);
+                    canvas.drawLine(x-size,y-size,x+size,y+size,paint);
+                    canvas.drawLine(x-size,y+size,x+size,y-size,paint);
+                }
+                @Override public void setAlpha(int a){paint.setAlpha(a);}
+                @Override public void setColorFilter(android.graphics.ColorFilter filter){paint.setColorFilter(filter);}
+                @Override public int getOpacity(){return android.graphics.PixelFormat.TRANSLUCENT;}
+            });
+        }
         if(elapsed!=null)elapsed.setText(format(p.position()));
         if(remaining!=null)remaining.setText(format(p.duration()));
         if(seek!=null&&!dragging){seek.setMax(Math.max(1,p.duration()));seek.setProgress(p.position());}
