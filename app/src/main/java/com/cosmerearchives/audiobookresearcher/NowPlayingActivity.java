@@ -24,7 +24,7 @@ import org.json.JSONObject;
 public class NowPlayingActivity extends Activity {
     private static final int PURPLE=0xFF7F64B7;
     private PlaybackService playback;
-    private TextView play,elapsed,remaining,handsFreeStatus;
+    private TextView play,elapsed,remaining,microphone;
     private SeekBar seek;
     private boolean dragging;
     private final Handler handler=new Handler(Looper.getMainLooper());
@@ -54,7 +54,10 @@ public class NowPlayingActivity extends Activity {
         getWindow().setStatusBarColor(0xFF392E51);
         getWindow().setNavigationBarColor(0xFF392E51);
         playback=PlaybackService.instance;
-        if(playback==null||playback.player==null){finish();return;}
+        if(playback==null||playback.player==null){
+            startActivity(new Intent(this,MainActivity.class).putExtra("section","library"));
+            finish();return;
+        }
         FrameLayout screen=new FrameLayout(this);screen.setBackgroundColor(PURPLE);
         String cover=coverFor(playback.uri);
         if(!cover.isEmpty()){
@@ -69,27 +72,35 @@ public class NowPlayingActivity extends Activity {
         LinearLayout column=new LinearLayout(this);column.setOrientation(LinearLayout.VERTICAL);
         column.setPadding(dp(20),dp(12),dp(20),dp(24));
         screen.addView(column,new FrameLayout.LayoutParams(-1,-1));
-        TextView close=label("‹  Library",19,true);close.setGravity(Gravity.CENTER_VERTICAL);
-        column.addView(close,new LinearLayout.LayoutParams(-1,dp(56)));
-        close.setOnClickListener(v->finish());
+        LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView menu=label("☰",31,true);menu.setContentDescription("Open navigation menu");
+        top.addView(menu,new LinearLayout.LayoutParams(dp(64),dp(64)));
+        menu.setOnClickListener(v->{
+            final String[] items={"Media Library","Notes","Options"};
+            new android.app.AlertDialog.Builder(this).setTitle("Audiobook Researcher")
+                .setItems(items,(dialog,which)->{
+                    String section=which==0?"library":which==1?"notes":"options";
+                    startActivity(new Intent(this,MainActivity.class).putExtra("section",section));
+                    finish();
+                }).show();
+        });
+        View filler=new View(this);top.addView(filler,new LinearLayout.LayoutParams(0,dp(1),1));
+        microphone=label("♩",29,true);microphone.setText("🎙");
+        microphone.setContentDescription("Toggle voice activation");
+        top.addView(microphone,new LinearLayout.LayoutParams(dp(64),dp(64)));
+        microphone.setOnClickListener(v->{
+            if(HandsFreeService.serviceActive)stopService(new Intent(this,HandsFreeService.class));
+            else if(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED){
+                try{startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));}
+                catch(Exception e){android.widget.Toast.makeText(this,"Microphone unavailable: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
+            }else requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO},300);
+            handler.postDelayed(this::refresh,350);
+        });
+        column.addView(top);
         TextView title=label(playback.title,26,true);
         column.addView(title,new LinearLayout.LayoutParams(-1,dp(70)));
         TextView chapter=label("NOW PLAYING",14,false);
         chapter.setTextColor(0xFFDCD2F6);column.addView(chapter);
-        handsFreeStatus=label("Voice detection: checking…",14,true);
-        handsFreeStatus.setTextColor(0xFFFFFFFF);
-        column.addView(handsFreeStatus,new LinearLayout.LayoutParams(-1,dp(44)));
-        handsFreeStatus.setOnClickListener(v->{
-            if(HandsFreeService.serviceActive){
-                stopService(new Intent(this,HandsFreeService.class));
-            }else if(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED){
-                try{startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));}
-                catch(Exception e){android.widget.Toast.makeText(this,"Cannot start microphone: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
-            }else{
-                android.widget.Toast.makeText(this,"Enable microphone permission from the Library screen",android.widget.Toast.LENGTH_LONG).show();
-            }
-            handler.postDelayed(this::refresh,350);
-        });
         FrameLayout middle=new FrameLayout(this);
         column.addView(middle,new LinearLayout.LayoutParams(-1,0,1));
         play=label(playback.isPlaying()?"❚❚":"▶",96,true);
@@ -130,10 +141,17 @@ public class NowPlayingActivity extends Activity {
         PlaybackService p=PlaybackService.instance;
         if(p==null||p.player==null){finish();return;}
         if(play!=null)play.setText(p.isPlaying()?"❚❚":"▶");
-        if(handsFreeStatus!=null)handsFreeStatus.setText("Voice detection: "+(HandsFreeService.serviceActive?HandsFreeService.listeningState+" • tap to stop":"Off • tap to start"));
+        if(microphone!=null){microphone.setAlpha(HandsFreeService.serviceActive?1f:.55f);microphone.setContentDescription(HandsFreeService.serviceActive?"Voice activation on. Tap to stop.":"Voice activation off. Tap to start.");}
         if(elapsed!=null)elapsed.setText(format(p.position()));
         if(remaining!=null)remaining.setText(format(p.duration()));
         if(seek!=null&&!dragging){seek.setMax(Math.max(1,p.duration()));seek.setProgress(p.position());}
+    }
+    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
+        super.onRequestPermissionsResult(request,permissions,results);
+        if(request==300&&results.length>0&&results[0]==android.content.pm.PackageManager.PERMISSION_GRANTED){
+            try{startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));}
+            catch(Exception e){android.widget.Toast.makeText(this,"Microphone unavailable: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
+        }
     }
     @Override protected void onResume(){super.onResume();handler.post(ticker);}
     @Override protected void onPause(){handler.removeCallbacks(ticker);super.onPause();}
