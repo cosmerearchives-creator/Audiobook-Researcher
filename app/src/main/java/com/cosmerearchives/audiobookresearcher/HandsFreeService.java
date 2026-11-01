@@ -97,7 +97,6 @@ public class HandsFreeService extends Service {
         PlaybackService playback=PlaybackService.instance;
         if(playback==null||playback.player==null){scheduleRestart();return;}
         bookUri=playback.uri;timestamp=playback.position();resume=playback.isPlaying();
-        setDuck(false);
         android.content.SharedPreferences debug=getSharedPreferences("library",MODE_PRIVATE);
         debug.edit().putInt("wakeDetections",debug.getInt("wakeDetections",0)+1).apply();
         if(debug.getBoolean("wakeTestMode",false)){
@@ -149,7 +148,6 @@ public class HandsFreeService extends Service {
             }catch(Exception ignored){}
         }else if(audioFile!=null)audioFile.delete();
         PlaybackService p=PlaybackService.instance;
-        setDuck(false);
         if(resume&&p!=null)p.play();
         resume=false;
         if(enabled){
@@ -161,7 +159,6 @@ public class HandsFreeService extends Service {
     private void shutdown(){
         enabled=false;
         serviceActive=false;listeningState="Off";
-        setDuck(false);
         getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",false).apply();
         handler.removeCallbacks(restart);handler.removeCallbacks(monitor);
         if(detector!=null){detector.stop();detector=null;}
