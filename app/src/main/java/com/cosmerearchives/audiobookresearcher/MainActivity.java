@@ -122,7 +122,7 @@ public class MainActivity extends Activity {
         if(section==null)section="library";
         restoreBooks();
         restoreNotes();
-        backgroundHandsFree=prefs.getBoolean("backgroundHandsFree",false);
+        backgroundHandsFree=HandsFreeService.serviceActive;
         tts=new TextToSpeech(this,result->{});
         render();
         bindService(new Intent(this,PlaybackService.class),serviceConnection,BIND_AUTO_CREATE);
@@ -228,7 +228,7 @@ public class MainActivity extends Activity {
         space(root,14);
         }
         if(section.equals("options")){
-        if (active != null && player != null) {
+        {
             TextView diagnostics=button("Wake detection settings & test",false);
             root.addView(diagnostics);
             diagnostics.setOnClickListener(v->openWakeDiagnostics());
@@ -255,6 +255,10 @@ public class MainActivity extends Activity {
         }
         }
         if(section.equals("notes")){
+        if(active!=null&&player!=null){
+            TextView addNote=button("+ Add bookmarked note",true);
+            root.addView(addNote);addNote.setOnClickListener(v->startNote());space(root,16);
+        }
         TextView notesHeading=text("Bookmarked notes",21,true);root.addView(notesHeading);
         space(root,10);
         int noteCount=0;
