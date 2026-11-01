@@ -71,13 +71,39 @@ public class HandsFreeService extends Service {
         startForeground(43,note,ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
     }
     private OfflineBookmarkDetector detector;
+    private boolean ducked;
+    private long recentVoice;
+    private long lastDuckAt;
+    private final Runnable restoreVolume=()->setDuck(false);
+    private void setDuck(boolean value){
+        if(ducked==value)return;
+        ducked=value;
+        PlaybackService p=PlaybackService.instance;
+        if(p!=null)p.setHandsFreeDuck(value);
+        getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("wakeDucked",value).apply();
+    }
+    private void receivedLevel(int level){
+        getSharedPreferences("library",MODE_PRIVATE).edit().putInt("wakeMicLevel",level).apply();
+        long now=SystemClock.elapsedRealtime();
+        // Gate on sustained, relatively strong audio so narration does not duck continuously.
+        int gate=getSharedPreferences("library",MODE_PRIVATE).getInt("wakeVoiceGate",30);
+        if(level>=gate){
+            if(recentVoice==0)recentVoice=now;
+            if(now-recentVoice>=300 && now-lastDuckAt>=2500){
+                setDuck(true);lastDuckAt=now;
+            }
+            handler.removeCallbacks(restoreVolume);
+            handler.postDelayed(restoreVolume,1500);
+        }else if(now-recentVoice>1600)recentVoice=0;
+    }
     private void listen(){
         if(!enabled||listening||recording)return;
         listening=true;
         showNotification("Offline listening for Bookmark");
         detector=new OfflineBookmarkDetector(this,
             ()->{listening=false;capture();},
-            error->{listening=false;showNotification("Microphone error: "+error);scheduleRestart();}
+            error->{listening=false;setDuck(false);showNotification("Microphone error: "+error);scheduleRestart();},
+            level->receivedLevel(level)
         );
         detector.start();
     }
@@ -89,6 +115,12 @@ public class HandsFreeService extends Service {
         PlaybackService playback=PlaybackService.instance;
         if(playback==null||playback.player==null){scheduleRestart();return;}
         bookUri=playback.uri;timestamp=playback.position();resume=playback.isPlaying();
+        setDuck(false);
+        android.content.SharedPreferences debug=getSharedPreferences("library",MODE_PRIVATE);
+        debug.edit().putInt("wakeDetections",debug.getInt("wakeDetections",0)+1).apply();
+        if(debug.getBoolean("wakeTestMode",false)){
+            showNotification("Test detection succeeded • listening");scheduleRestart();return;
+        }
         playback.pause();
         if(detector!=null){detector.stop();detector=null;}
         listening=false;
@@ -131,6 +163,7 @@ public class HandsFreeService extends Service {
             }catch(Exception ignored){}
         }else if(audioFile!=null)audioFile.delete();
         PlaybackService p=PlaybackService.instance;
+        setDuck(false);
         if(resume&&p!=null)p.play();
         resume=false;
         if(enabled){
@@ -140,6 +173,8 @@ public class HandsFreeService extends Service {
     }
     private void shutdown(){
         enabled=false;
+        setDuck(false);
+        handler.removeCallbacks(restoreVolume);
         getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",false).apply();
         handler.removeCallbacks(restart);handler.removeCallbacks(monitor);
         if(detector!=null){detector.stop();detector=null;}
