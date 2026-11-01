@@ -1,4 +1,4 @@
-plugins { id("com.android.application") }
+plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") version "2.0.21" }
 
 android {
     namespace = "com.cosmerearchives.audiobookresearcher"
@@ -32,4 +32,4 @@ android {
     }
 }
 
-dependencies { }
+dependencies { implementation(files("libs/sherpa-onnx.aar")) }
