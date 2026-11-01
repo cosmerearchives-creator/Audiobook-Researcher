@@ -49,6 +49,63 @@ public class MainActivity extends Activity {
     private boolean backgroundHandsFree;
     private String section="library";
     private Runnable buttonTestTicker;
+    private MediaPlayer notePlayer;
+    private Note playingNote;
+    private Runnable noteTicker;
+    private TextView notePlayButton;
+    private void stopNotePlayer(){
+        if(noteTicker!=null)handler.removeCallbacks(noteTicker);
+        noteTicker=null;
+        if(notePlayer!=null){try{notePlayer.release();}catch(Exception ignored){}notePlayer=null;}
+        if(notePlayButton!=null)notePlayButton.setText("▶");
+        notePlayButton=null;playingNote=null;
+    }
+    private String clipTime(int millis){
+        int secs=Math.max(0,millis/1000);
+        return String.format(java.util.Locale.US,"%d:%02d",secs/60,secs%60);
+    }
+    private void toggleNoteClip(Note note,TextView playControl,TextView timer){
+        if(notePlayer!=null && playingNote==note){
+            if(notePlayer.isPlaying()){notePlayer.pause();playControl.setText("▶");}
+            else{notePlayer.start();playControl.setText("❚❚");}
+            return;
+        }
+        stopNotePlayer();
+        try{
+            MediaPlayer mp=new MediaPlayer();
+            mp.setDataSource(note.audioPath);mp.prepare();
+            notePlayer=mp;playingNote=note;notePlayButton=playControl;
+            mp.setOnCompletionListener(done->{
+                if(notePlayer!=done)return;
+                done.seekTo(0);
+                playControl.setText("▶");
+                timer.setText("0:00 / "+clipTime(done.getDuration()));
+            });
+            timer.setText("0:00 / "+clipTime(mp.getDuration()));
+            mp.start();playControl.setText("❚❚");
+            noteTicker=new Runnable(){public void run(){
+                if(notePlayer!=mp)return;
+                timer.setText(clipTime(mp.getCurrentPosition())+" / "+clipTime(mp.getDuration()));
+                handler.postDelayed(this,250);
+            }};
+            handler.post(noteTicker);
+        }catch(Exception e){
+            stopNotePlayer();
+            new android.app.AlertDialog.Builder(this).setMessage("Unable to play voice note: "+e.getMessage()).setPositiveButton("OK",null).show();
+        }
+    }
+    private void deleteVoiceNote(Note note){
+        new android.app.AlertDialog.Builder(this).setTitle("Delete voice note?")
+            .setMessage("This permanently deletes the saved recording and bookmark.")
+            .setNegativeButton("Cancel",null)
+            .setPositiveButton("Delete",(dialog,which)->{
+                if(playingNote==note)stopNotePlayer();
+                notes.remove(note);saveNotes();
+                if(note.audioPath!=null&&!note.audioPath.isEmpty())new File(note.audioPath).delete();
+                render();
+            }).show();
+    }
+
     private SpeechRecognizer wakeRecognizer;
     private boolean wakeEnabled=false;
     private boolean wakeRunning=false;
@@ -297,8 +354,19 @@ public class MainActivity extends Activity {
             space(noteRow,6);
             TextView body=text(n.body,15,false);noteRow.addView(body);
             if(n.audioPath!=null&&!n.audioPath.isEmpty()){
-                TextView listen=button("▶ Play saved voice note",false);noteRow.addView(listen);
-                listen.setOnClickListener(v->playNoteAudio(n.audioPath));
+                LinearLayout mini=new LinearLayout(this);mini.setGravity(Gravity.CENTER_VERTICAL);
+                TextView listen=button("▶",false);
+                listen.setContentDescription("Play or pause voice note");
+                mini.addView(listen,new LinearLayout.LayoutParams(dp(64),dp(58)));
+                TextView timer=text("0:00 / --:--",14,true);
+                timer.setGravity(Gravity.CENTER);
+                mini.addView(timer,new LinearLayout.LayoutParams(0,dp(58),1));
+                TextView delete=button("Delete",false);
+                delete.setTextColor(0xFFB3261E);
+                mini.addView(delete,new LinearLayout.LayoutParams(dp(90),dp(58)));
+                noteRow.addView(mini);
+                listen.setOnClickListener(v->toggleNoteClip(n,listen,timer));
+                delete.setOnClickListener(v->deleteVoiceNote(n));
                 space(noteRow,8);
             }
             space(noteRow,8);
@@ -814,5 +882,5 @@ public class MainActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();if(buttonTestTicker!=null&&section.equals("tools"))handler.post(buttonTestTicker);if(updater!=null)updater.onResume();if(prefs!=null){notes.clear();restoreNotes();}}
     @Override protected void onPause(){if(buttonTestTicker!=null)handler.removeCallbacks(buttonTestTicker);stopWake();super.onPause();saveBooks();}
-    @Override protected void onDestroy(){stopWake();if(recording)finishRecording(false);if(tts!=null)tts.shutdown();if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
+    @Override protected void onDestroy(){stopNotePlayer();stopWake();if(recording)finishRecording(false);if(tts!=null)tts.shutdown();if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
 }
