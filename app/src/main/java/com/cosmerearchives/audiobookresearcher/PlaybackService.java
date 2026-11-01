@@ -130,7 +130,6 @@ public class PlaybackService extends Service {
     }
     void open(String source,String name,int at)throws Exception{
         if(player!=null){player.release();player=null;}
-        if(player!=null)storeProgress(false);
         uri=source;title=name;
         getSharedPreferences("library",0).edit().putString("lastBookUri",source).apply();
         MediaPlayer next=new MediaPlayer();
