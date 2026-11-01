@@ -115,3 +115,9 @@ under Options. Notes have their own screen, including an Add note action.
 No automatic audiobook playback-volume reduction remains; wake detection still
 monitors the microphone at normal audiobook volume.
 The library is shown when no audiobook can be restored.
+
+## Bluetooth-triggered hands-free activation
+
+The Now Playing screen checks Android audio output devices on resume and listens for device additions/removals while that screen is visible. When Bluetooth headset/car output connects, it automatically starts the existing offline wake-word foreground service (requesting microphone permission once if required). A manually disabled microphone stays off until the Bluetooth connection is removed. The microphone button still controls listening directly. When a Bluetooth-triggered session disconnects while the player is visible, the app stops that session; manually started sessions are left alone. Audiobook volume remains unchanged.
+
+Android restricts launching microphone foreground services from the background, so automatic activation is supported while the player is foreground/visible; a connection happening while the app is fully backgrounded may not start recording until the player resumes. Device audio input routing varies by headset, vehicle, and Android version: detecting Bluetooth audio output does not guarantee sherpa-onnx gets the Bluetooth microphone rather than the phone microphone. This change has not yet been verified by an Android CI build or hardware test.
