@@ -150,9 +150,11 @@ public class NowPlayingActivity extends Activity {
             handler.postDelayed(this::refresh,350);
         });
         column.addView(top);
-        TextView title=label(playback.title,26,true);
+        org.json.JSONObject customGroup=BookOrganizer.groupFor(this,playback.uri);
+        String displayTitle=customGroup==null?playback.title:customGroup.optString("name",playback.title);
+        TextView title=label(displayTitle,26,true);
         column.addView(title,new LinearLayout.LayoutParams(-1,dp(70)));
-        TextView chapter=label("NOW PLAYING",14,false);
+        TextView chapter=label(customGroup==null?"NOW PLAYING":playback.title,14,false);
         chapter.setTextColor(0xFFDCD2F6);column.addView(chapter);
         FrameLayout middle=new FrameLayout(this);
         column.addView(middle,new LinearLayout.LayoutParams(-1,0,1));
