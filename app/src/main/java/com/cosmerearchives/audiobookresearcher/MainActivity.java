@@ -41,6 +41,7 @@ import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private static final int PICK_AUDIO = 200;
+    private static final int PICK_AUDIOBOOK_FOLDER = 205;
     private static final int PICK_COVER_FOLDER = 204;
     private static final int DICTATE_NOTE = 201;
     private static final int MIC_PERMISSION = 202;
@@ -198,15 +199,20 @@ public class MainActivity extends Activity {
             });
             space(root,18);
         }
-        TextView importButton = button("+ Import audiobook",true);
+        TextView importButton=button(prefs.getString("audiobookFolder","").isEmpty()?
+            "Choose Audiobooks folder":"Change Audiobooks folder",true);
         root.addView(importButton);
-        importButton.setOnClickListener(v -> {
-            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType("audio/*");
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-            startActivityForResult(intent,PICK_AUDIO);
+        importButton.setOnClickListener(v->{
+            Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            startActivityForResult(intent,PICK_AUDIOBOOK_FOLDER);
         });
+        space(root,10);
+        if(!prefs.getString("audiobookFolder","").isEmpty()){
+            TextView scanButton=button("↻  Scan Audiobooks folder",false);
+            root.addView(scanButton);
+            scanButton.setOnClickListener(v->scanAudiobookFolder(Uri.parse(prefs.getString("audiobookFolder",""))));
+        }
         space(root,22);
         TextView libraryTitle = text("Your books",21,true); root.addView(libraryTitle);
         space(root,12);
@@ -680,6 +686,20 @@ public class MainActivity extends Activity {
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
+        if(request==PICK_AUDIOBOOK_FOLDER){
+            if(result==RESULT_OK&&data!=null&&data.getData()!=null){
+                Uri folder=data.getData();
+                try{
+                    getContentResolver().takePersistableUriPermission(folder,Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    prefs.edit().putString("audiobookFolder",folder.toString()).apply();
+                    scanAudiobookFolder(folder);
+                }catch(Exception e){
+                    new android.app.AlertDialog.Builder(this).setMessage("Unable to access folder: "+e.getMessage())
+                        .setPositiveButton("OK",null).show();
+                }
+            }
+            return;
+        }
         if(request==PICK_COVER_FOLDER) {
             if(result==RESULT_OK&&data!=null&&data.getData()!=null&&active!=null){
                 Uri folder=data.getData();
@@ -709,6 +729,43 @@ public class MainActivity extends Activity {
         for(Book b:books)if(b.uri.equals(uri.toString())){openBook(b);return;}
         Book b=new Book(uri.toString(),title,0);
         books.add(0,b);saveBooks();openBook(b);
+    }
+    private void scanAudiobookFolder(Uri folder){
+        if(folder==null)return;
+        android.app.ProgressDialog progress=new android.app.ProgressDialog(this);
+        progress.setMessage("Scanning audiobook folders…");
+        progress.setCancelable(false);
+        progress.show();
+        new Thread(()->{
+            java.util.ArrayList<AudiobookFolderScanner.Found> found=null;
+            Exception failure=null;
+            try{found=AudiobookFolderScanner.scan(getApplicationContext(),folder);}
+            catch(Exception e){failure=e;}
+            final java.util.ArrayList<AudiobookFolderScanner.Found> results=found;
+            final Exception error=failure;
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed()){progress.dismiss();return;}
+                progress.dismiss();
+                if(error!=null){
+                    new android.app.AlertDialog.Builder(this).setTitle("Folder scan failed")
+                        .setMessage(error.getMessage()).setPositiveButton("OK",null).show();return;
+                }
+                java.util.HashSet<String> existing=new java.util.HashSet<>();
+                for(Book b:books)existing.add(b.uri);
+                int added=0;
+                for(AudiobookFolderScanner.Found item:results){
+                    if(existing.add(item.uri)){
+                        Book book=new Book(item.uri,item.title,0);
+                        book.folderUri=item.folderUri;book.coverUri=item.coverUri;
+                        books.add(book);added++;
+                    }
+                }
+                saveBooks();render();
+                new android.app.AlertDialog.Builder(this).setTitle("Audiobooks scanned")
+                    .setMessage("Found "+results.size()+" audio files. Added "+added+" new entries to your library.")
+                    .setPositiveButton("OK",null).show();
+            });
+        }).start();
     }
     private void restoreBooks() {
         try {
