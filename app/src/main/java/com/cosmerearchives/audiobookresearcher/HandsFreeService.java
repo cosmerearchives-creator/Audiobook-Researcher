@@ -18,6 +18,7 @@ import java.util.Locale;
 public class HandsFreeService extends Service {
     public static final String START="com.cosmerearchives.audiobookresearcher.HANDS_FREE_START";
     public static final String STOP="com.cosmerearchives.audiobookresearcher.HANDS_FREE_STOP";
+    public static final String RELOAD="com.cosmerearchives.audiobookresearcher.HANDS_FREE_RELOAD";
     private static final String CHANNEL="hands_free";
     private final Handler handler=new Handler(Looper.getMainLooper());
     private SpeechRecognizer recognizer;
@@ -58,6 +59,13 @@ public class HandsFreeService extends Service {
     @Override public IBinder onBind(Intent intent){return null;}
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         if(intent!=null&&STOP.equals(intent.getAction())){shutdown();stopSelf();return START_NOT_STICKY;}
+        if(intent!=null&&RELOAD.equals(intent.getAction())&&enabled){
+            handler.removeCallbacks(restart);
+            if(detector!=null){detector.stop();detector=null;}
+            listening=false;
+            if(!recording)handler.postDelayed(restart,400);
+            return START_NOT_STICKY;
+        }
         if(!enabled){
             if(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
                 stopSelf();return START_NOT_STICKY;
@@ -93,7 +101,7 @@ public class HandsFreeService extends Service {
         listeningState="Listening";
         showNotification("Offline listening for Bookmark");
         detector=new OfflineBookmarkDetector(this,
-            ()->{listening=false;capture();},
+            ()->{if(!enabled||!listening)return;listening=false;capture();},
             error->{listening=false;listeningState="Error: "+error;showNotification("Microphone error: "+error);scheduleRestart();},
             level->receivedLevel(level)
         );
