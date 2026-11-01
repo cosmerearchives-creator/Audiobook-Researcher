@@ -1,0 +1,30 @@
+name: Prepare offline wake-word assets
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download sherpa-onnx English keyword model and Android runtime
+        run: |
+          set -euo pipefail
+          mkdir -p wake-assets
+          curl -fL --retry 3 -o wake-assets/model.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2
+          curl -fL --retry 3 -o wake-assets/android.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-v2.0.1-android.tar.bz2
+          test "$(stat -c %s wake-assets/model.tar.bz2)" -gt 100000
+          test "$(stat -c %s wake-assets/android.tar.bz2)" -gt 100000
+          sha256sum wake-assets/*.tar.bz2 | tee wake-assets/SHA256SUMS
+          tar -tjf wake-assets/model.tar.bz2 | head -40 || true
+          tar -tjf wake-assets/android.tar.bz2 | head -40 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sherpa-onnx-offline-wake-assets
+          path: wake-assets/
+          retention-days: 7
