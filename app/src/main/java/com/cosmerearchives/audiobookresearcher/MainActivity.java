@@ -280,30 +280,38 @@ public class MainActivity extends Activity {
             empty.setBackground(shape(Color.WHITE,16,0xFFE0DDD8));
             root.addView(empty);
         }
-        java.util.ArrayList<Book> sortedBooks=new java.util.ArrayList<>(books);
-        java.util.Collections.sort(sortedBooks,(a,b)->{
-            String keyA=a.album.isEmpty()?"~"+a.title:a.album.toLowerCase(java.util.Locale.ROOT)+"|"+a.artist.toLowerCase(java.util.Locale.ROOT);
-            String keyB=b.album.isEmpty()?"~"+b.title:b.album.toLowerCase(java.util.Locale.ROOT)+"|"+b.artist.toLowerCase(java.util.Locale.ROOT);
-            int c=keyA.compareTo(keyB);
-            if(c!=0)return c;
-            try{return Integer.compare(Integer.parseInt(a.track.replaceAll("[^0-9].*","")),Integer.parseInt(b.track.replaceAll("[^0-9].*","")));}catch(Exception ignored){return a.title.compareToIgnoreCase(b.title);}
-        });
-        String previousAlbum="";
-        for (Book book : sortedBooks) {
-            String group=book.album.trim().isEmpty()?"":book.album+"|"+book.artist;
-            if(!group.isEmpty()&&!group.equals(previousAlbum)){
-                TextView groupLabel=text(book.album+(book.artist.isEmpty()?"":"  •  "+book.artist),19,true);
-                root.addView(groupLabel);space(root,10);
+        TextView create=button("+ Create Book",true);root.addView(create);
+        create.setOnClickListener(v->editCustomBook(null));space(root,14);
+        java.util.HashSet<String> consumed=new java.util.HashSet<>();
+        org.json.JSONArray custom=BookOrganizer.groups(this);
+        for(int g=0;g<custom.length();g++){
+            org.json.JSONObject group=custom.optJSONObject(g);if(group==null)continue;
+            org.json.JSONArray members=group.optJSONArray("parts");if(members==null)continue;
+            java.util.ArrayList<Book> parts=new java.util.ArrayList<>();
+            for(int p=0;p<members.length();p++){
+                String uri=members.optString(p);
+                for(Book b:books)if(b.uri.equals(uri)){parts.add(b);consumed.add(uri);break;}
             }
-            previousAlbum=group;
-            LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.VERTICAL);
-            row.setPadding(dp(16),dp(14),dp(16),dp(14)); row.setBackground(shape(Color.WHITE,16,0xFFE0DDD8));
-            TextView title = text(book.title,17,true); row.addView(title);
-            space(row,5);
-            TextView detail = text((book.track.isEmpty()?"":"Part/track "+book.track+"  •  ")+"Resume at " + format(book.position),13,false);
-            detail.setTextColor(0xFF817E78); row.addView(detail);
-            root.addView(row); space(root,10);
-            row.setOnClickListener(v -> openBook(book));
+            if(parts.isEmpty())continue;
+            String name=group.optString("name","Custom Book");
+            addBookGroup(root,"custom:"+g,name,parts,true,group);
+        }
+        java.util.LinkedHashMap<String,java.util.ArrayList<Book>> metadata=new java.util.LinkedHashMap<>();
+        for(Book book:books){
+            if(consumed.contains(book.uri))continue;
+            String key=book.album.isEmpty()?"single:"+book.uri:"album:"+book.album+"|"+book.artist;
+            if(!metadata.containsKey(key))metadata.put(key,new java.util.ArrayList<>());
+            metadata.get(key).add(book);
+        }
+        for(java.util.Map.Entry<String,java.util.ArrayList<Book>> entry:metadata.entrySet()){
+            java.util.ArrayList<Book> parts=entry.getValue();
+            java.util.Collections.sort(parts,(a,b)->{
+                try{return Integer.compare(Integer.parseInt(a.track.replaceAll("[^0-9].*","")),Integer.parseInt(b.track.replaceAll("[^0-9].*","")));}
+                catch(Exception e){return a.title.compareToIgnoreCase(b.title);}
+            });
+            Book first=parts.get(0);
+            String name=first.album.isEmpty()?first.title:first.album+(first.artist.isEmpty()?"":" • "+first.artist);
+            addBookGroup(root,entry.getKey(),name,parts,false,null);
         }
         space(root,14);
         }
@@ -859,6 +867,159 @@ public class MainActivity extends Activity {
                     .setPositiveButton("OK",null).show();
             });
         }).start();
+    }
+
+    private String playbackStatus(Book b){
+        if(b.position<=0)return "Not started";
+        return "Resume at "+format(b.position);
+    }
+    private void addBookGroup(LinearLayout root,String key,String name,java.util.ArrayList<Book> parts,boolean manual,org.json.JSONObject group){
+        boolean expanded=prefs.getBoolean("expanded:"+key,false);
+        LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(13),dp(15),dp(13),dp(15));
+        header.setBackground(shape(Color.WHITE,14,0xFFE0DDD8));
+        LinearLayout captions=new LinearLayout(this);captions.setOrientation(LinearLayout.VERTICAL);
+        TextView heading=text(name,18,true);captions.addView(heading);
+        String status="Not started";
+        for(Book part:parts)if(part.position>0){status=playbackStatus(part);break;}
+        TextView detail=text(parts.size()+" part"+(parts.size()==1?"":"s")+" • "+status,13,false);
+        captions.addView(detail);header.addView(captions,new LinearLayout.LayoutParams(0,-2,1));
+        TextView arrow=text(expanded?"⌄":"›",26,true);header.addView(arrow);
+        root.addView(header);space(root,6);
+        header.setOnClickListener(v->{prefs.edit().putBoolean("expanded:"+key,!expanded).apply();render();});
+        if(!expanded){space(root,12);return;}
+        TextView playAll=button("▶ Play "+name,true);root.addView(playAll);
+        playAll.setOnClickListener(v->{
+            for(Book b:parts)if(!BookOrganizer.isWholeWrapping(this,b.uri)){openBook(b);return;}
+        });
+        if(manual){
+            TextView edit=button("Edit Book / Arrange Parts",false);root.addView(edit);
+            edit.setOnClickListener(v->editCustomBook(group));
+        }
+        for(Book part:parts){
+            LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(dp(20),dp(12),dp(12),dp(12));
+            row.setBackground(shape(Color.WHITE,12,0xFFE0DDD8));
+            TextView title=text(part.title,16,true);row.addView(title);
+            String detailText=(part.track.isEmpty()?"":"Track "+part.track+" • ")+playbackStatus(part);
+            if(BookOrganizer.isWholeWrapping(this,part.uri))detailText+=" • Wrapping (auto-skip)";
+            TextView progress=text(detailText,13,false);row.addView(progress);
+            root.addView(row);space(root,6);
+            row.setOnClickListener(v->openBook(part));
+            TextView wrap=button("Edit wrapping: "+part.title,false);
+            root.addView(wrap);
+            wrap.setOnClickListener(v->editWrapping(part));
+            space(root,6);
+        }
+        space(root,12);
+    }
+    private void editCustomBook(org.json.JSONObject existing){
+        org.json.JSONObject group=existing==null?new org.json.JSONObject():existing;
+        android.widget.EditText name=new android.widget.EditText(this);
+        name.setHint("Book title");name.setText(group.optString("name",""));
+        LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(20),dp(4),dp(20),0);
+        layout.addView(name);
+        java.util.ArrayList<Book> candidates=new java.util.ArrayList<>(books);
+        boolean[] chosen=new boolean[candidates.size()];
+        org.json.JSONArray selected=group.optJSONArray("parts");
+        for(int i=0;i<candidates.size();i++)chosen[i]=BookOrganizer.indexOf(selected,candidates.get(i).uri)>=0;
+        String[] labels=new String[candidates.size()];
+        for(int i=0;i<candidates.size();i++)labels[i]=candidates.get(i).title+(candidates.get(i).album.isEmpty()?"":" ("+candidates.get(i).album+")");
+        TextView hint=text("Select parts, then use Arrange Parts to set their order.",13,false);layout.addView(hint);
+        new android.app.AlertDialog.Builder(this).setTitle(existing==null?"Create Book":"Edit Book")
+            .setView(layout).setMultiChoiceItems(labels,chosen,(d,index,checked)->chosen[index]=checked)
+            .setPositiveButton("Continue",(d,w)->{
+                String title=name.getText().toString().trim();
+                if(title.isEmpty()){android.widget.Toast.makeText(this,"Enter a book title",android.widget.Toast.LENGTH_LONG).show();return;}
+                org.json.JSONArray picked=new org.json.JSONArray();
+                if(selected!=null)for(int i=0;i<selected.length();i++){
+                    String uri=selected.optString(i);
+                    for(int j=0;j<candidates.size();j++)if(chosen[j]&&candidates.get(j).uri.equals(uri)){picked.put(uri);chosen[j]=false;break;}
+                }
+                for(int i=0;i<candidates.size();i++)if(chosen[i])picked.put(candidates.get(i).uri);
+                try{group.put("name",title);group.put("parts",picked);}catch(Exception ignored){}
+                org.json.JSONArray groups=BookOrganizer.groups(this);
+                if(existing==null)groups.put(group);
+                else{
+                    for(int i=0;i<groups.length();i++)if(groups.optJSONObject(i)!=null&&groups.optJSONObject(i).optString("id").equals(group.optString("id"))){try{groups.put(i,group);}catch(Exception ignored){}break;}
+                }
+                if(group.optString("id").isEmpty()){
+                    try{group.put("id",java.util.UUID.randomUUID().toString());}catch(Exception ignored){}
+                }
+                BookOrganizer.save(this,groups);
+                arrangeParts(group);
+            }).setNegativeButton("Cancel",null).show();
+    }
+    private void arrangeParts(org.json.JSONObject group){
+        org.json.JSONArray arr=group.optJSONArray("parts");if(arr==null)return;
+        java.util.ArrayList<String> order=new java.util.ArrayList<>();
+        for(int i=0;i<arr.length();i++)order.add(arr.optString(i));
+        showPartOrder(group,order);
+    }
+    private void showPartOrder(org.json.JSONObject group,java.util.ArrayList<String> order){
+        String[] labels=new String[order.size()];
+        for(int i=0;i<order.size();i++){
+            String title=order.get(i);
+            for(Book b:books)if(b.uri.equals(order.get(i))){title=b.title;break;}
+            labels[i]=(i+1)+". "+title;
+        }
+        new android.app.AlertDialog.Builder(this).setTitle("Arrange Parts")
+            .setItems(labels,(d,index)->{
+                String part=order.get(index);
+                new android.app.AlertDialog.Builder(this).setTitle(labels[index])
+                    .setItems(new String[]{"Move up","Move down","Mark wrapping"},(dd,choice)->{
+                        if(choice==0&&index>0)java.util.Collections.swap(order,index,index-1);
+                        if(choice==1&&index<order.size()-1)java.util.Collections.swap(order,index,index+1);
+                        if(choice==2)for(Book b:books)if(b.uri.equals(part)){editWrapping(b);break;}
+                        showPartOrder(group,order);
+                    }).show();
+            })
+            .setPositiveButton("Save order",(d,w)->{
+                org.json.JSONArray ordered=new org.json.JSONArray();
+                for(String part:order)ordered.put(part);
+                try{group.put("parts",ordered);}catch(Exception ignored){}
+                org.json.JSONArray groups=BookOrganizer.groups(this);
+                for(int i=0;i<groups.length();i++)if(group.optString("id").equals(groups.optJSONObject(i).optString("id"))){
+                    try{groups.put(i,group);}catch(Exception ignored){}break;
+                }
+                BookOrganizer.save(this,groups);render();
+            }).setNegativeButton("Done",null).show();
+    }
+    private void editWrapping(Book b){
+        org.json.JSONObject marker=BookOrganizer.marker(this,b.uri);
+        LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(20),dp(4),dp(20),0);
+        android.widget.CheckBox whole=new android.widget.CheckBox(this);
+        whole.setText("Entire chapter is wrapping (skip automatically)");
+        whole.setChecked(marker.optBoolean("whole",false));layout.addView(whole);
+        TextView hint=text("Optional timed wrapping regions (seconds). Add multiple ranges separated by commas, e.g. 0-45, 3500-3560.",14,false);
+        layout.addView(hint);
+        android.widget.EditText ranges=new android.widget.EditText(this);
+        ranges.setHint("0-45, 3500-3560");
+        org.json.JSONArray existing=marker.optJSONArray("ranges");
+        StringBuilder initial=new StringBuilder();
+        if(existing!=null)for(int i=0;i<existing.length();i++){
+            org.json.JSONArray pair=existing.optJSONArray(i);if(pair==null)continue;
+            if(initial.length()>0)initial.append(", ");
+            initial.append(pair.optInt(0)/1000).append("-").append(pair.optInt(1)/1000);
+        }
+        ranges.setText(initial.toString());layout.addView(ranges);
+        new android.app.AlertDialog.Builder(this).setTitle("Wrapping • "+b.title).setView(layout)
+            .setPositiveButton("Save",(d,w)->{
+                org.json.JSONArray output=new org.json.JSONArray();
+                for(String item:ranges.getText().toString().split(",")){
+                    String[] bounds=item.trim().split("-");
+                    if(bounds.length!=2)continue;
+                    try{
+                        int from=(int)(Double.parseDouble(bounds[0].trim())*1000);
+                        int to=(int)(Double.parseDouble(bounds[1].trim())*1000);
+                        if(from>=0&&to>from)output.put(new org.json.JSONArray().put(from).put(to));
+                    }catch(Exception ignored){}
+                }
+                try{marker.put("whole",whole.isChecked());marker.put("ranges",output);}catch(Exception ignored){}
+                BookOrganizer.setMarker(this,b.uri,marker);render();
+            }).setNegativeButton("Cancel",null).show();
     }
     private void restoreBooks() {
         try {
