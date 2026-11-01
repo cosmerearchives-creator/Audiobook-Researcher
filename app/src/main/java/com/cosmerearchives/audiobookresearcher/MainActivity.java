@@ -469,6 +469,11 @@ public class MainActivity extends Activity {
         space(root,18);
         }
         if(section.equals("tools")){
+            TextView startup=text("Voice engine stage: "+prefs.getString("wakeStartupStage","not started"),15,true);
+            root.addView(startup);
+            TextView lastWake=text("Voice engine error: "+prefs.getString("wakeLastError","none recorded"),13,false);
+            lastWake.setTextIsSelectable(true);
+            root.addView(lastWake);space(root,12);
             TextView crashTitle=text("Startup & crash diagnostics",21,true);
             root.addView(crashTitle);space(root,8);
             TextView crashReport=text(prefs.getString("lastCrashReport","No Java crash recorded yet."),12,false);
