@@ -178,7 +178,7 @@ public class MainActivity extends Activity {
         space(root,15);
         TextView heading = text("Audiobook Researcher", 28, true); root.addView(heading);
         space(root,7);
-        TextView sub = text(section.equals("notes")?"Your bookmarked notes":section.equals("options")?"App & voice activation settings":"Your listening library",15,false);
+        TextView sub = text(section.equals("notes")?"Your bookmarked notes":section.equals("options")?"App & voice activation settings":section.equals("tools")?"Diagnostics and utilities":"Your listening library",15,false);
         sub.setTextColor(0xFF807D77); root.addView(sub);
         space(root,12);
         if(section.equals("library")){
@@ -290,6 +290,28 @@ public class MainActivity extends Activity {
         }
         if(noteCount==0)root.addView(text(active==null?"Open an audiobook to view its notes.":"No notes for this audiobook yet.",14,false));
         space(root,18);
+        }
+        if(section.equals("tools")){
+            TextView testerTitle=text("Bluetooth Button Tester",21,true);
+            root.addView(testerTitle);space(root,8);
+            TextView guidance=text("While parked, connect Bluetooth audio and press a steering-wheel button. Only media events Android delivers to the app can appear here. Phone answer and hang-up buttons may not emit media events.",15,false);
+            root.addView(guidance);space(root,12);
+            TextView result=text("Waiting for media button…",17,true);
+            result.setPadding(dp(16),dp(22),dp(16),dp(22));
+            result.setBackground(shape(Color.WHITE,16,0xFFE0DDD8));
+            root.addView(result);
+            final Runnable[] updater=new Runnable[1];
+            updater[0]=()->{
+                if(!section.equals("tools"))return;
+                String event=PlaybackService.lastMediaButton;
+                long at=PlaybackService.lastMediaButtonAt;
+                result.setText(event+(at>0?"\\nReceived: "+new java.text.SimpleDateFormat("HH:mm:ss",java.util.Locale.US).format(new java.util.Date(at)):""));
+                handler.postDelayed(updater[0],350);
+            };
+            handler.post(updater[0]);
+            space(root,12);
+            TextView testNote=text("This tester observes Android MediaSession events. It does not intercept telephone calls or remap calling buttons. Playback may respond normally to tested media controls.",13,false);
+            root.addView(testNote);
         }
         if(section.equals("options")){
         TextView updaterTitle = text("App updates",20,true); root.addView(updaterTitle);
