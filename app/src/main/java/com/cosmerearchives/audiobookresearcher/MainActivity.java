@@ -50,6 +50,7 @@ public class MainActivity extends Activity {
     private String section="library";
     private Runnable buttonTestTicker;
     private ScrollView libraryScroll;
+    private TextView scanRefreshButton;
     private int pendingLibraryScroll=-1;
     private MediaPlayer notePlayer;
     private Note playingNote;
@@ -256,6 +257,7 @@ public class MainActivity extends Activity {
         TextView libraryTitle=text("Your books",21,true);
         headingRow.addView(libraryTitle,new LinearLayout.LayoutParams(0,-2,1));
         TextView refresh=button("↻",false);
+        scanRefreshButton=refresh;
         refresh.setTextSize(23);
         refresh.setContentDescription("Rescan Audiobooks folder");
         headingRow.addView(refresh,new LinearLayout.LayoutParams(dp(58),dp(54)));
@@ -879,6 +881,7 @@ public class MainActivity extends Activity {
             runOnUiThread(()->{
                 if(isFinishing()||isDestroyed()){progress.dismiss();return;}
                 progress.dismiss();
+                if(scanRefreshButton!=null){scanRefreshButton.setText("↻");scanRefreshButton.setEnabled(true);}
                 if(error!=null){
                     new android.app.AlertDialog.Builder(this).setTitle("Folder scan failed")
                         .setMessage(error.getMessage()).setPositiveButton("OK",null).show();return;
