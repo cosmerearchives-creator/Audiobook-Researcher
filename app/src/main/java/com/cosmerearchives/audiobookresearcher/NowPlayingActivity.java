@@ -154,9 +154,26 @@ public class NowPlayingActivity extends Activity {
         chapter.setTextColor(0xFFDCD2F6);column.addView(chapter);
         FrameLayout middle=new FrameLayout(this);
         column.addView(middle,new LinearLayout.LayoutParams(-1,0,1));
+        FrameLayout coverButton=new FrameLayout(this);
+        coverButton.setContentDescription("Play or pause audiobook");
+        coverButton.setClickable(true);
+        coverButton.setFocusable(true);
+        coverButton.setOnClickListener(v->{
+            PlaybackService p=PlaybackService.instance;
+            if(p!=null)p.toggle();
+            refresh();
+        });
+        // Keep a square regardless of artwork, scaled to fit both screen width
+        // and the available vertical player space.
+        middle.addOnLayoutChangeListener((v,left,top,right,bottom,oldLeft,oldTop,oldRight,oldBottom)->{
+            int side=Math.max(dp(160),Math.min(right-left-dp(12),bottom-top-dp(12)));
+            FrameLayout.LayoutParams size=new FrameLayout.LayoutParams(side,side,Gravity.CENTER);
+            coverButton.setLayoutParams(size);
+        });
+        middle.addView(coverButton,new FrameLayout.LayoutParams(dp(240),dp(240),Gravity.CENTER));
         ImageView largeCover=new ImageView(this);
         largeCover.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        largeCover.setAlpha(0.38f);
+        largeCover.setAlpha(0.48f);
         boolean hasArt=false;
         if(!cover.isEmpty()){
             try{largeCover.setImageURI(Uri.parse(cover));hasArt=largeCover.getDrawable()!=null;}catch(Exception ignored){}
@@ -174,16 +191,20 @@ public class NowPlayingActivity extends Activity {
             finally{try{mmr.release();}catch(Exception ignored){}}
         }
         if(hasArt){
-            FrameLayout.LayoutParams artParams=new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER);
-            artParams.setMargins(dp(12),dp(10),dp(12),dp(10));
-            middle.addView(largeCover,artParams);
+            coverButton.addView(largeCover,new FrameLayout.LayoutParams(-1,-1));
+        }else{
+            GradientDrawable outline=new GradientDrawable();
+            outline.setColor(Color.TRANSPARENT);
+            outline.setStroke(dp(3),0xAADFD0F6);
+            outline.setCornerRadius(dp(3));
+            coverButton.setBackground(outline);
         }
         play=label(playback.isPlaying()?"❚❚":"▶",96,true);
         play.setContentDescription("Play or pause audiobook");
-        FrameLayout.LayoutParams center=new FrameLayout.LayoutParams(dp(200),dp(200),Gravity.CENTER);
+        play.setClickable(false);
+        play.setFocusable(false);
         play.setBackground(bg(0x557F64B7,100));
-        middle.addView(play,center);
-        play.setOnClickListener(v->{PlaybackService p=PlaybackService.instance;if(p!=null)p.toggle();refresh();});
+        coverButton.addView(play,new FrameLayout.LayoutParams(dp(200),dp(200),Gravity.CENTER));
         LinearLayout times=new LinearLayout(this);times.setOrientation(LinearLayout.HORIZONTAL);
         elapsed=label("0:00",17,true);elapsed.setGravity(Gravity.LEFT);
         remaining=label("0:00",17,true);remaining.setGravity(Gravity.RIGHT);
