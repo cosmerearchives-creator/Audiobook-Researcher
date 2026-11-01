@@ -9,6 +9,8 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.media.AudioManager;
+import android.media.MediaMetadataRetriever;
+import android.graphics.BitmapFactory;
 import android.media.AudioDeviceInfo;
 import android.media.AudioDeviceCallback;
 import android.content.pm.PackageManager;
@@ -152,6 +154,30 @@ public class NowPlayingActivity extends Activity {
         chapter.setTextColor(0xFFDCD2F6);column.addView(chapter);
         FrameLayout middle=new FrameLayout(this);
         column.addView(middle,new LinearLayout.LayoutParams(-1,0,1));
+        ImageView largeCover=new ImageView(this);
+        largeCover.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        largeCover.setAlpha(0.38f);
+        boolean hasArt=false;
+        if(!cover.isEmpty()){
+            try{largeCover.setImageURI(Uri.parse(cover));hasArt=largeCover.getDrawable()!=null;}catch(Exception ignored){}
+        }
+        if(!hasArt){
+            MediaMetadataRetriever mmr=new MediaMetadataRetriever();
+            try{
+                mmr.setDataSource(this,Uri.parse(playback.uri));
+                byte[] embedded=mmr.getEmbeddedPicture();
+                if(embedded!=null&&embedded.length>0){
+                    largeCover.setImageBitmap(BitmapFactory.decodeByteArray(embedded,0,embedded.length));
+                    hasArt=largeCover.getDrawable()!=null;
+                }
+            }catch(Exception ignored){}
+            finally{try{mmr.release();}catch(Exception ignored){}}
+        }
+        if(hasArt){
+            FrameLayout.LayoutParams artParams=new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER);
+            artParams.setMargins(dp(12),dp(10),dp(12),dp(10));
+            middle.addView(largeCover,artParams);
+        }
         play=label(playback.isPlaying()?"❚❚":"▶",96,true);
         play.setContentDescription("Play or pause audiobook");
         FrameLayout.LayoutParams center=new FrameLayout.LayoutParams(dp(200),dp(200),Gravity.CENTER);
