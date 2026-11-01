@@ -165,14 +165,19 @@ public class NowPlayingActivity extends Activity {
         });
         // Keep a square regardless of artwork, scaled to fit both screen width
         // and the available vertical player space.
+        // The artwork must itself be the hit target, not just the icon.
+        // Match its bounds to the entire available square and keep the icon
+        // and artwork non-clickable so touches reach the parent.
+        middle.addView(coverButton,new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));
         middle.addOnLayoutChangeListener((v,left,top,right,bottom,oldLeft,oldTop,oldRight,oldBottom)->{
-            int side=Math.max(dp(64),Math.min(right-left-dp(12),bottom-top-dp(12)));
+            int side=Math.min(right-left,bottom-top);
             FrameLayout.LayoutParams size=new FrameLayout.LayoutParams(side,side,Gravity.CENTER);
             coverButton.setLayoutParams(size);
         });
-        middle.addView(coverButton,new FrameLayout.LayoutParams(dp(240),dp(240),Gravity.CENTER));
         ImageView largeCover=new ImageView(this);
         largeCover.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        largeCover.setClickable(false);
+        largeCover.setFocusable(false);
         largeCover.setAlpha(0.48f);
         boolean hasArt=false;
         if(!cover.isEmpty()){
@@ -202,6 +207,7 @@ public class NowPlayingActivity extends Activity {
         play=label(playback.isPlaying()?"❚❚":"▶",96,true);
         play.setContentDescription("Play or pause audiobook");
         play.setClickable(false);
+        play.setEnabled(false);
         play.setFocusable(false);
         play.setBackground(bg(0x557F64B7,100));
         coverButton.addView(play,new FrameLayout.LayoutParams(dp(200),dp(200),Gravity.CENTER));
