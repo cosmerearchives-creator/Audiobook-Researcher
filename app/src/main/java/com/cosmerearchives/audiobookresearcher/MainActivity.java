@@ -47,6 +47,7 @@ public class MainActivity extends Activity {
     private static final int WAKE_PERMISSION = 203;
     private boolean backgroundHandsFree;
     private String section="library";
+    private Runnable buttonTestTicker;
     private SpeechRecognizer wakeRecognizer;
     private boolean wakeEnabled=false;
     private boolean wakeRunning=false;
@@ -300,6 +301,7 @@ public class MainActivity extends Activity {
             result.setPadding(dp(16),dp(22),dp(16),dp(22));
             result.setBackground(shape(Color.WHITE,16,0xFFE0DDD8));
             root.addView(result);
+            if(buttonTestTicker!=null)handler.removeCallbacks(buttonTestTicker);
             final Runnable[] updater=new Runnable[1];
             updater[0]=()->{
                 if(!section.equals("tools"))return;
@@ -308,7 +310,8 @@ public class MainActivity extends Activity {
                 result.setText(event+(at>0?"\\nReceived: "+new java.text.SimpleDateFormat("HH:mm:ss",java.util.Locale.US).format(new java.util.Date(at)):""));
                 handler.postDelayed(updater[0],350);
             };
-            handler.post(updater[0]);
+            buttonTestTicker=updater[0];
+            handler.post(buttonTestTicker);
             space(root,12);
             TextView testNote=text("This tester observes Android MediaSession events. It does not intercept telephone calls or remap calling buttons. Playback may respond normally to tested media controls.",13,false);
             root.addView(testNote);
@@ -726,7 +729,7 @@ public class MainActivity extends Activity {
         }catch(Exception ignored){}items.put(item);}
         prefs.edit().putString("books",items.toString()).apply();
     }
-    @Override protected void onResume(){super.onResume();if(updater!=null)updater.onResume();if(prefs!=null){notes.clear();restoreNotes();}}
-    @Override protected void onPause(){stopWake();super.onPause();saveBooks();}
+    @Override protected void onResume(){super.onResume();if(buttonTestTicker!=null&&section.equals("tools"))handler.post(buttonTestTicker);if(updater!=null)updater.onResume();if(prefs!=null){notes.clear();restoreNotes();}}
+    @Override protected void onPause(){if(buttonTestTicker!=null)handler.removeCallbacks(buttonTestTicker);stopWake();super.onPause();saveBooks();}
     @Override protected void onDestroy(){stopWake();if(recording)finishRecording(false);if(tts!=null)tts.shutdown();if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
 }
