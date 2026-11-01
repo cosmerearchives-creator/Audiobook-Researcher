@@ -76,8 +76,23 @@ public class HandsFreeService extends Service {
             getSharedPreferences("library",MODE_PRIVATE).edit().remove("wakeLastError").apply();
             serviceActive=true;listeningState="Starting";
             getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",true).apply();
-            showNotification("Offline listening for Bookmark");
-            listen();
+            try{
+                getSharedPreferences("library",MODE_PRIVATE).edit().putString("wakeStartupStage","starting microphone notification").commit();
+                showNotification("Starting voice detector");
+                getSharedPreferences("library",MODE_PRIVATE).edit().putString("wakeStartupStage","creating offline detector").commit();
+                listen();
+            }catch(Throwable failure){
+                String detail=failure.getClass().getSimpleName()+": "+String.valueOf(failure.getMessage());
+                lastStartError=detail;
+                listeningState="Error: "+detail;
+                getSharedPreferences("library",MODE_PRIVATE).edit()
+                    .putString("wakeLastError",detail).putString("wakeStartupStage","failed during startup").commit();
+                android.util.Log.e("HandsFreeService","Failed to initialize hands-free",failure);
+                enabled=false;serviceActive=false;
+                try{stopForeground(STOP_FOREGROUND_REMOVE);}catch(Exception ignored){}
+                stopSelf();
+                return START_NOT_STICKY;
+            }
         }
         return START_NOT_STICKY;
     }
