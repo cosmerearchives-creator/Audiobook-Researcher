@@ -137,6 +137,7 @@ public class NowPlayingActivity extends Activity {
         microphone.setContentDescription("Toggle voice activation");
         top.addView(microphone,new LinearLayout.LayoutParams(dp(64),dp(64)));
         microphone.setOnClickListener(v->{
+            noteLifecycle("Mic tapped; player still foreground");
             if(HandsFreeService.serviceActive && !HandsFreeService.listeningState.startsWith("Error:")){
                 if(bluetoothConnected)getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("bluetoothManualOff",true).apply();
                 bluetoothStartedVoice=false;
@@ -293,6 +294,13 @@ public class NowPlayingActivity extends Activity {
             catch(Exception e){android.widget.Toast.makeText(this,"Microphone unavailable: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
         }
     }
-    @Override protected void onResume(){super.onResume();if(audioManager!=null)audioManager.registerAudioDeviceCallback(bluetoothWatcher,handler);syncBluetooth();handler.post(ticker);}
+    private void noteLifecycle(String event){
+        getSharedPreferences("library",MODE_PRIVATE).edit()
+            .putString("playerLifecycle",event+" • "+new java.text.SimpleDateFormat("HH:mm:ss.SSS",java.util.Locale.US).format(new java.util.Date()))
+            .commit();
+    }
+    @Override protected void onStop(){noteLifecycle("NowPlaying onStop");super.onStop();}
+    @Override protected void onDestroy(){noteLifecycle("NowPlaying onDestroy; finishing="+isFinishing());super.onDestroy();}
+    @Override protected void onResume(){noteLifecycle("NowPlaying onResume");super.onResume();if(audioManager!=null)audioManager.registerAudioDeviceCallback(bluetoothWatcher,handler);syncBluetooth();handler.post(ticker);}
     @Override protected void onPause(){handler.removeCallbacks(ticker);if(audioManager!=null)audioManager.unregisterAudioDeviceCallback(bluetoothWatcher);super.onPause();}
 }
