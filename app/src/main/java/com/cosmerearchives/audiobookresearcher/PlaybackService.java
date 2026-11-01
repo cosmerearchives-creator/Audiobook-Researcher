@@ -24,6 +24,29 @@ public class PlaybackService extends Service {
     private AudioManager audio;
     private AudioManager.OnAudioFocusChangeListener focusListener;
     private boolean resumeOnFocus;
+    private final Handler wrapHandler=new Handler(Looper.getMainLooper());
+    private final Runnable wrappingTicker=new Runnable(){public void run(){
+        if(player!=null&&isPlaying()){
+            int at=position(),adjusted=BookOrganizer.skipPosition(PlaybackService.this,uri,at,duration());
+            if(adjusted>=duration()-250&&adjusted>at)advance();
+            else if(adjusted>at+100)seek(adjusted);
+        }
+        wrapHandler.postDelayed(this,500);
+    }};
+    private void advance(){
+        String next=BookOrganizer.next(this,uri);
+        if(next==null){pause();return;}
+        try{
+            org.json.JSONArray all=new org.json.JSONArray(getSharedPreferences("library",0).getString("books","[]"));
+            String name=next;
+            for(int i=0;i<all.length();i++){
+                org.json.JSONObject book=all.optJSONObject(i);
+                if(book!=null&&next.equals(book.optString("uri"))){name=book.optString("title",next);break;}
+            }
+            open(next,name,0);
+        }catch(Exception e){pause();}
+    }
+
     static volatile String lastMediaButton="No button detected yet";
     static volatile long lastMediaButtonAt=0;
     private void logMediaButton(String value){lastMediaButton=value;lastMediaButtonAt=System.currentTimeMillis();}
@@ -73,6 +96,7 @@ public class PlaybackService extends Service {
         });
         session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
         session.setActive(true);
+        wrapHandler.postDelayed(wrappingTicker,500);
     }
     @Override public IBinder onBind(Intent i){return binder;}
     @Override public int onStartCommand(Intent intent,int flags,int id){
@@ -88,13 +112,14 @@ public class PlaybackService extends Service {
     void open(String source,String name,int at)throws Exception{
         if(player!=null){player.release();player=null;}
         uri=source;title=name;
+        getSharedPreferences("library",0).edit().putString("lastBookUri",source).apply();
         MediaPlayer next=new MediaPlayer();
         next.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build());
         try{
             next.setDataSource(this,Uri.parse(source));
             next.prepare();
             next.seekTo(Math.min(Math.max(0,at),next.getDuration()));
-            next.setOnCompletionListener(p->{pause();seek(0);});
+            next.setOnCompletionListener(p->advance());
             player=next;
             play();
         }catch(Exception ex){next.release();throw ex;}
@@ -143,5 +168,5 @@ public class PlaybackService extends Service {
         audio.abandonAudioFocus(focusListener);
         stopForeground(STOP_FOREGROUND_REMOVE);
     }
-    @Override public void onDestroy(){stopPlayback();session.release();instance=null;super.onDestroy();}
+    @Override public void onDestroy(){wrapHandler.removeCallbacks(wrappingTicker);stopPlayback();session.release();instance=null;super.onDestroy();}
 }
