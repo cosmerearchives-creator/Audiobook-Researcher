@@ -52,7 +52,7 @@ public class HandsFreeService extends Service {
             }
             enabled=true;
             getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",true).apply();
-            showNotification("Listening for Bookmark");
+            showNotification("Offline listening for Bookmark");
             listen();
         }
         return START_NOT_STICKY;
@@ -70,39 +70,16 @@ public class HandsFreeService extends Service {
             .build();
         startForeground(43,note,ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
     }
+    private OfflineBookmarkDetector detector;
     private void listen(){
         if(!enabled||listening||recording)return;
-        if(!SpeechRecognizer.isRecognitionAvailable(this)){shutdown();stopSelf();return;}
-        if(recognizer==null){
-            recognizer=SpeechRecognizer.createSpeechRecognizer(this);
-            recognizer.setRecognitionListener(new RecognitionListener(){
-                @Override public void onReadyForSpeech(Bundle b){}
-                @Override public void onBeginningOfSpeech(){}
-                @Override public void onRmsChanged(float value){}
-                @Override public void onBufferReceived(byte[] data){}
-                @Override public void onEndOfSpeech(){}
-                @Override public void onPartialResults(Bundle b){}
-                @Override public void onEvent(int type,Bundle b){}
-                @Override public void onError(int code){
-                    listening=false;
-                    if(code==SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS){shutdown();stopSelf();return;}
-                    scheduleRestart();
-                }
-                @Override public void onResults(Bundle result){
-                    listening=false;
-                    ArrayList<String> words=result.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    if(words!=null)for(String word:words){
-                        if(java.util.Arrays.asList(word.toLowerCase(Locale.ROOT).split("[^a-z]+")).contains("bookmark")){capture();return;}
-                    }
-                    scheduleRestart();
-                }
-            });
-        }
-        Intent speech=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        speech.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS,true);
-        try{listening=true;recognizer.startListening(speech);}
-        catch(Exception e){listening=false;scheduleRestart();}
+        listening=true;
+        showNotification("Offline listening for Bookmark");
+        detector=new OfflineBookmarkDetector(this,
+            ()->{listening=false;capture();},
+            error->{listening=false;showNotification("Microphone error: "+error);scheduleRestart();}
+        );
+        detector.start();
     }
     private void scheduleRestart(){
         handler.removeCallbacks(restart);
@@ -113,7 +90,7 @@ public class HandsFreeService extends Service {
         if(playback==null||playback.player==null){scheduleRestart();return;}
         bookUri=playback.uri;timestamp=playback.position();resume=playback.isPlaying();
         playback.pause();
-        if(recognizer!=null){recognizer.destroy();recognizer=null;}
+        if(detector!=null){detector.stop();detector=null;}
         listening=false;
         File dir=new File(getFilesDir(),"voice_notes");
         if(!dir.exists()&&!dir.mkdirs()){endWithError();return;}
@@ -165,7 +142,7 @@ public class HandsFreeService extends Service {
         enabled=false;
         getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",false).apply();
         handler.removeCallbacks(restart);handler.removeCallbacks(monitor);
-        if(recognizer!=null){recognizer.destroy();recognizer=null;}
+        if(detector!=null){detector.stop();detector=null;}
         listening=false;
         if(recording)finishNote(false);
         stopForeground(STOP_FOREGROUND_REMOVE);
