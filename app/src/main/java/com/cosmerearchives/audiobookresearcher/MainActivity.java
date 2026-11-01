@@ -104,7 +104,7 @@ public class MainActivity extends Activity {
     private UpdateManager updater;
 
     private static class Book {
-        String uri, title, coverUri="", folderUri=""; int position;
+        String uri, title, coverUri="", folderUri="", album="", artist="", track=""; int position;
         Book(String u, String t, int p) { uri=u; title=t; position=p; }
     }
 
@@ -222,12 +222,27 @@ public class MainActivity extends Activity {
             empty.setBackground(shape(Color.WHITE,16,0xFFE0DDD8));
             root.addView(empty);
         }
-        for (Book book : books) {
+        java.util.ArrayList<Book> sortedBooks=new java.util.ArrayList<>(books);
+        java.util.Collections.sort(sortedBooks,(a,b)->{
+            String keyA=a.album.isEmpty()?"~"+a.title:a.album.toLowerCase(java.util.Locale.ROOT)+"|"+a.artist.toLowerCase(java.util.Locale.ROOT);
+            String keyB=b.album.isEmpty()?"~"+b.title:b.album.toLowerCase(java.util.Locale.ROOT)+"|"+b.artist.toLowerCase(java.util.Locale.ROOT);
+            int c=keyA.compareTo(keyB);
+            if(c!=0)return c;
+            try{return Integer.compare(Integer.parseInt(a.track.replaceAll("[^0-9].*","")),Integer.parseInt(b.track.replaceAll("[^0-9].*","")));}catch(Exception ignored){return a.title.compareToIgnoreCase(b.title);}
+        });
+        String previousAlbum="";
+        for (Book book : sortedBooks) {
+            String group=book.album.trim().isEmpty()?"":book.album+"|"+book.artist;
+            if(!group.isEmpty()&&!group.equals(previousAlbum)){
+                TextView groupLabel=text(book.album+(book.artist.isEmpty()?"":"  •  "+book.artist),19,true);
+                root.addView(groupLabel);space(root,10);
+            }
+            previousAlbum=group;
             LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.VERTICAL);
             row.setPadding(dp(16),dp(14),dp(16),dp(14)); row.setBackground(shape(Color.WHITE,16,0xFFE0DDD8));
             TextView title = text(book.title,17,true); row.addView(title);
             space(row,5);
-            TextView detail = text("Resume at " + format(book.position),13,false);
+            TextView detail = text((book.track.isEmpty()?"":"Part/track "+book.track+"  •  ")+"Resume at " + format(book.position),13,false);
             detail.setTextColor(0xFF817E78); row.addView(detail);
             root.addView(row); space(root,10);
             row.setOnClickListener(v -> openBook(book));
@@ -757,6 +772,7 @@ public class MainActivity extends Activity {
                     if(existing.add(item.uri)){
                         Book book=new Book(item.uri,item.title,0);
                         book.folderUri=item.folderUri;book.coverUri=item.coverUri;
+                        book.album=item.album;book.artist=item.artist;book.track=item.track;
                         books.add(book);added++;
                     }
                 }
@@ -774,6 +790,7 @@ public class MainActivity extends Activity {
                 JSONObject o=items.getJSONObject(i);
                 Book b=new Book(o.getString("uri"),o.getString("title"),o.optInt("position",0));
                 b.coverUri=o.optString("coverUri","");b.folderUri=o.optString("folderUri","");
+                b.album=o.optString("album","");b.artist=o.optString("artist","");b.track=o.optString("track","");
                 books.add(b);
             }
         }catch(Exception ignored){}
@@ -783,6 +800,7 @@ public class MainActivity extends Activity {
         for(Book b:books){JSONObject item=new JSONObject();try{
             item.put("uri",b.uri);item.put("title",b.title);item.put("position",b.position);
             item.put("coverUri",b.coverUri);item.put("folderUri",b.folderUri);
+            item.put("album",b.album);item.put("artist",b.artist);item.put("track",b.track);
         }catch(Exception ignored){}items.put(item);}
         prefs.edit().putString("books",items.toString()).apply();
     }
