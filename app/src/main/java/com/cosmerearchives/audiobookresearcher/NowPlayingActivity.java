@@ -198,6 +198,7 @@ public class NowPlayingActivity extends Activity {
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
         super.onRequestPermissionsResult(request,permissions,results);
         if(request==300&&results.length>0&&results[0]==android.content.pm.PackageManager.PERMISSION_GRANTED){
+            if(bluetoothConnected)bluetoothStartedVoice=true;
             try{startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));}
             catch(Exception e){android.widget.Toast.makeText(this,"Microphone unavailable: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
         }
