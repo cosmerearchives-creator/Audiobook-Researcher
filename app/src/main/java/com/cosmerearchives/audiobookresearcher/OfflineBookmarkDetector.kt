@@ -84,7 +84,7 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
     }
     private fun tokenizePhrase(phrase: String, directory: String): List<String> {
         val json = context.assets.open("$directory/bpe-vocab.json").bufferedReader().use { JSONObject(it.readText()) }
-        val words = phrase.lowercase(Locale.ROOT).trim().split(Regex("\\s+"))
+        val words = phrase.uppercase(Locale.ROOT).trim().split(Regex("\\s+"))
         val output = mutableListOf<String>()
         for (word in words) {
             val chars = ("▁" + word).map { it.toString() }.toMutableList()
