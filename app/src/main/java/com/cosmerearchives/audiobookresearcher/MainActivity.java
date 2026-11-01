@@ -135,10 +135,12 @@ public class MainActivity extends Activity {
     private MediaPlayer player;
     private PlaybackService playback;
     private boolean bound;
+    private boolean pendingOpenPlayer;
     private final android.content.ServiceConnection serviceConnection=new android.content.ServiceConnection(){
         @Override public void onServiceConnected(android.content.ComponentName name,android.os.IBinder binder){
             playback=((PlaybackService.LocalBinder)binder).service();bound=true;
-            boolean launchPlayer=getIntent().getBooleanExtra("openPlayer",false) || !getIntent().hasExtra("section");
+            boolean launchPlayer=pendingOpenPlayer || getIntent().getBooleanExtra("openPlayer",false) || !getIntent().hasExtra("section");
+            pendingOpenPlayer=false;
             if(playback.player==null&&launchPlayer&&!books.isEmpty()){
                 try{
                     String recent=prefs.getString("lastBookUri","");
@@ -236,6 +238,34 @@ public class MainActivity extends Activity {
         b.setBackground(shape(primary ? PURPLE : Color.WHITE, 14, primary ? 0 : 0xFFDCDAD6));
         return b;
     }
+    private void returnToPlayer(){
+        if(playback==null){
+            pendingOpenPlayer=true;
+            if(!bound)bindService(new Intent(this,PlaybackService.class),serviceConnection,BIND_AUTO_CREATE);
+            return;
+        }
+        if(playback.player==null){
+            if(books.isEmpty()){
+                android.widget.Toast.makeText(this,"Choose an audiobook first",android.widget.Toast.LENGTH_LONG).show();
+                return;
+            }
+            String recent=prefs.getString("lastBookUri","");
+            Book selected=books.get(0);
+            for(Book book:books)if(book.uri.equals(recent)){selected=book;break;}
+            try{
+                startService(new Intent(this,PlaybackService.class));
+                playback.open(selected.uri,selected.title,selected.position);
+                playback.pause();
+                active=selected;
+                player=playback.player;
+            }catch(Exception e){
+                new android.app.AlertDialog.Builder(this).setTitle("Cannot restore audiobook")
+                    .setMessage(e.getMessage()).setPositiveButton("OK",null).show();
+                return;
+            }
+        }
+        startActivity(new Intent(this,NowPlayingActivity.class));
+    }
     private void render() {
         if(notePlayer!=null)stopNotePlayer();
         ScrollView scroll = new ScrollView(this);
@@ -244,7 +274,7 @@ public class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20),dp(28),dp(20),dp(30)); scroll.addView(root);
         TextView toPlayer=button("‹  Now Playing",false);
-        root.addView(toPlayer);toPlayer.setOnClickListener(v->startActivity(new Intent(this,NowPlayingActivity.class)));
+        root.addView(toPlayer);toPlayer.setOnClickListener(v->returnToPlayer());
         space(root,15);
         TextView heading = text("Audiobook Researcher", 28, true); root.addView(heading);
         space(root,7);
