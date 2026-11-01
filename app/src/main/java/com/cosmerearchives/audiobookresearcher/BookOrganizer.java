@@ -32,7 +32,7 @@ final class BookOrganizer {
         if(parts==null)return null;
         for(int i=at+1;i<parts.length();i++){
             String next=parts.optString(i);
-            if(!isWholeWrapping(c,next))return next;
+            if(c.getSharedPreferences(PREFS,0).getBoolean("includeWrapping",false)||!isWholeWrapping(c,next))return next;
         }
         return null;
     }
@@ -52,6 +52,7 @@ final class BookOrganizer {
         c.getSharedPreferences(PREFS,0).edit().putString("wrappingMarkers",all.toString()).apply();
     }
     static int skipPosition(Context c,String uri,int pos,int duration){
+        if(c.getSharedPreferences(PREFS,0).getBoolean("includeWrapping",false))return pos;
         JSONObject m=marker(c,uri);
         JSONArray ranges=m.optJSONArray("ranges");if(ranges==null)return pos;
         for(int step=0;step<ranges.length();step++){
