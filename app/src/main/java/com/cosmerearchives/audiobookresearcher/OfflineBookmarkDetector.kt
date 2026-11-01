@@ -39,14 +39,14 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                         tokens = "$dir/tokens.txt",
                         modelType = "zipformer2"
                     ),
-                    keywordsFile = "$dir/keywords.txt",
+                    keywordsFile = "", // Do not load the bundled default Hey Bookmark keyword.
                     keywordsThreshold = 0.50f - sensitivity * 0.004f
                 )
                 spotter = KeywordSpotter(assetManager = context.assets, config = config)
                 val phrase = context.getSharedPreferences("library", Context.MODE_PRIVATE)
                     .getString("wakePhrase", "Hey Bookmark") ?: "Hey Bookmark"
                 val tokens = tokenizePhrase(phrase, dir)
-                stream = spotter.createStream(tokens.joinToString(" ") + " @" + phrase.uppercase(Locale.ROOT).replace(" ", "_"))
+                val normalizedPhrase = phrase.trim().uppercase(Locale.ROOT).replace(Regex("\\s+"), " ")\n                stream = spotter.createStream(tokens.joinToString(" ") + " @" + normalizedPhrase.replace(" ", "_"))
                 val size = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 require(size > 0) { "No compatible microphone buffer" }
                 val mic = AudioRecord(MediaRecorder.AudioSource.MIC, 16000,
@@ -71,7 +71,7 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                     while (running && spotter.isReady(stream)) {
                         spotter.decode(stream)
                         val result = spotter.getResult(stream).keyword
-                        if (result.isNotBlank()) {
+                        if (result.isNotBlank() && result.trim().uppercase(Locale.ROOT).replace("_", " ") == normalizedPhrase) {
                             running = false
                             detected = true
                             break
