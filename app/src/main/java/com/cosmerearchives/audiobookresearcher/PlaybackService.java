@@ -24,6 +24,9 @@ public class PlaybackService extends Service {
     private AudioManager audio;
     private AudioManager.OnAudioFocusChangeListener focusListener;
     private boolean resumeOnFocus;
+    static volatile String lastMediaButton="No button detected yet";
+    static volatile long lastMediaButtonAt=0;
+    private void logMediaButton(String value){lastMediaButton=value;lastMediaButtonAt=System.currentTimeMillis();}
     class LocalBinder extends Binder { PlaybackService service(){return PlaybackService.this;} }
 
     @Override public void onCreate() {
@@ -40,14 +43,15 @@ public class PlaybackService extends Service {
         };
         session=new MediaSession(this,"AudiobookResearcher");
         session.setCallback(new MediaSession.Callback(){
-            @Override public void onPlay(){play();}
-            @Override public void onPause(){pause();}
-            @Override public void onSkipToPrevious(){seek(position()-15000);}
-            @Override public void onSkipToNext(){seek(position()+30000);}
+            @Override public void onPlay(){logMediaButton("MediaSession: Play");play();}
+            @Override public void onPause(){logMediaButton("MediaSession: Pause");pause();}
+            @Override public void onSkipToPrevious(){logMediaButton("MediaSession: Previous");seek(position()-15000);}
+            @Override public void onSkipToNext(){logMediaButton("MediaSession: Next");seek(position()+30000);}
             @Override public void onSeekTo(long p){seek((int)p);}
             @Override public boolean onMediaButtonEvent(Intent intent){
                 KeyEvent key=intent==null?null:intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
                 if(key!=null && key.getAction()==KeyEvent.ACTION_DOWN && key.getRepeatCount()==0){
+                    logMediaButton(KeyEvent.keyCodeToString(key.getKeyCode()));
                     switch(key.getKeyCode()){
                         case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
                         case KeyEvent.KEYCODE_HEADSETHOOK:
