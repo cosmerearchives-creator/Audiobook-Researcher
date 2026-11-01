@@ -47,7 +47,7 @@ public class NowPlayingActivity extends Activity {
         return false;
     }
     private void startBluetoothVoice(){
-        if(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)return;
+        if(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO},300);return;}
         try{
             startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));
             bluetoothStartedVoice=true;
