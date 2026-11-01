@@ -8,6 +8,10 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.media.AudioManager;
+import android.media.AudioDeviceInfo;
+import android.media.AudioDeviceCallback;
+import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
@@ -27,6 +31,42 @@ public class NowPlayingActivity extends Activity {
     private TextView play,elapsed,remaining,microphone;
     private SeekBar seek;
     private boolean dragging;
+    private AudioManager audioManager;
+    private boolean bluetoothConnected=false, bluetoothStartedVoice=false;
+    private final AudioDeviceCallback bluetoothWatcher=new AudioDeviceCallback(){
+        @Override public void onAudioDevicesAdded(AudioDeviceInfo[] devices){handler.post(()->syncBluetooth());}
+        @Override public void onAudioDevicesRemoved(AudioDeviceInfo[] devices){handler.post(()->syncBluetooth());}
+    };
+    private boolean bluetoothOutputConnected(){
+        if(audioManager==null)return false;
+        for(AudioDeviceInfo d:audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)){
+            int t=d.getType();
+            if(t==AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || t==AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                ||t==AudioDeviceInfo.TYPE_BLE_HEADSET || t==AudioDeviceInfo.TYPE_BLE_SPEAKER)return true;
+        }
+        return false;
+    }
+    private void startBluetoothVoice(){
+        if(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)return;
+        try{
+            startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));
+            bluetoothStartedVoice=true;
+        }catch(Exception e){android.widget.Toast.makeText(this,"Voice activation unavailable: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
+    }
+    private void syncBluetooth(){
+        boolean current=bluetoothOutputConnected();
+        if(!current){
+            if(bluetoothStartedVoice && HandsFreeService.serviceActive)stopService(new Intent(this,HandsFreeService.class));
+            bluetoothStartedVoice=false;
+            getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("bluetoothManualOff",false).apply();
+        }else if(!HandsFreeService.serviceActive &&
+            !getSharedPreferences("library",MODE_PRIVATE).getBoolean("bluetoothManualOff",false)){
+            startBluetoothVoice();
+        }
+        bluetoothConnected=current;
+        refresh();
+    }
+
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable ticker=new Runnable(){public void run(){refresh();handler.postDelayed(this,500);}};
     private int dp(int n){return (int)(getResources().getDisplayMetrics().density*n+.5f);}
@@ -53,6 +93,7 @@ public class NowPlayingActivity extends Activity {
     @Override public void onCreate(Bundle b){super.onCreate(b);
         getWindow().setStatusBarColor(0xFF392E51);
         getWindow().setNavigationBarColor(0xFF392E51);
+        audioManager=(AudioManager)getSystemService(AUDIO_SERVICE);
         playback=PlaybackService.instance;
         if(playback==null||playback.player==null){
             startActivity(new Intent(this,MainActivity.class).putExtra("section","library"));
@@ -89,9 +130,17 @@ public class NowPlayingActivity extends Activity {
         microphone.setContentDescription("Toggle voice activation");
         top.addView(microphone,new LinearLayout.LayoutParams(dp(64),dp(64)));
         microphone.setOnClickListener(v->{
-            if(HandsFreeService.serviceActive)stopService(new Intent(this,HandsFreeService.class));
+            if(HandsFreeService.serviceActive){
+                if(bluetoothConnected)getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("bluetoothManualOff",true).apply();
+                bluetoothStartedVoice=false;
+                stopService(new Intent(this,HandsFreeService.class));
+            }
             else if(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED){
-                try{startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));}
+                try{
+                    getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("bluetoothManualOff",false).apply();
+                    startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));
+                    bluetoothStartedVoice=false;
+                }
                 catch(Exception e){android.widget.Toast.makeText(this,"Microphone unavailable: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
             }else requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO},300);
             handler.postDelayed(this::refresh,350);
@@ -153,6 +202,6 @@ public class NowPlayingActivity extends Activity {
             catch(Exception e){android.widget.Toast.makeText(this,"Microphone unavailable: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
         }
     }
-    @Override protected void onResume(){super.onResume();handler.post(ticker);}
-    @Override protected void onPause(){handler.removeCallbacks(ticker);super.onPause();}
+    @Override protected void onResume(){super.onResume();if(audioManager!=null)audioManager.registerAudioDeviceCallback(bluetoothWatcher,handler);syncBluetooth();handler.post(ticker);}
+    @Override protected void onPause(){handler.removeCallbacks(ticker);if(audioManager!=null)audioManager.unregisterAudioDeviceCallback(bluetoothWatcher);super.onPause();}
 }
