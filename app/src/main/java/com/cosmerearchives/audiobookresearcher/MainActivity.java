@@ -469,6 +469,8 @@ public class MainActivity extends Activity {
         space(root,18);
         }
         if(section.equals("tools")){
+            TextView lifecycle=text("Player lifecycle: "+prefs.getString("playerLifecycle","not recorded"),14,true);
+            root.addView(lifecycle);space(root,8);
             TextView startup=text("Voice engine stage: "+prefs.getString("wakeStartupStage","not started"),15,true);
             root.addView(startup);
             TextView lastWake=text("Voice engine error: "+prefs.getString("wakeLastError","none recorded"),13,false);
