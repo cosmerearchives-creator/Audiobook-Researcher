@@ -228,6 +228,7 @@ public class MainActivity extends Activity {
         return b;
     }
     private void render() {
+        if(notePlayer!=null)stopNotePlayer();
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true); scroll.setBackgroundColor(BG);
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
