@@ -63,7 +63,8 @@ public class NowPlayingActivity extends Activity {
             if(bluetoothStartedVoice && HandsFreeService.serviceActive)stopService(new Intent(this,HandsFreeService.class));
             bluetoothStartedVoice=false;
             getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("bluetoothManualOff",false).apply();
-        }else if(!HandsFreeService.serviceActive &&
+        }else if(getSharedPreferences("library",MODE_PRIVATE).getBoolean("bluetoothAutoVoiceEnabled",false)
+            && !HandsFreeService.serviceActive &&
             getSharedPreferences("library",MODE_PRIVATE).getString("wakeLastError","").isEmpty() &&
             !getSharedPreferences("library",MODE_PRIVATE).getBoolean("bluetoothManualOff",false)){
             startBluetoothVoice();
