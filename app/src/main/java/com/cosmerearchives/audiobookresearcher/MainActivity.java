@@ -909,6 +909,21 @@ public class MainActivity extends Activity {
         if(manual){
             TextView edit=button("Edit Book / Arrange Parts",false);root.addView(edit);
             edit.setOnClickListener(v->editCustomBook(group));
+            TextView ungroup=button("Ungroup book (keep audio and notes)",false);
+            root.addView(ungroup);
+            ungroup.setOnClickListener(v->new android.app.AlertDialog.Builder(this)
+                .setTitle("Ungroup "+name+"?")
+                .setMessage("Parts will return to your normal library. No audio or bookmarks will be deleted.")
+                .setNegativeButton("Cancel",null)
+                .setPositiveButton("Ungroup",(d,w)->{
+                    org.json.JSONArray all=BookOrganizer.groups(this);
+                    org.json.JSONArray kept=new org.json.JSONArray();
+                    for(int i=0;i<all.length();i++){
+                        org.json.JSONObject item=all.optJSONObject(i);
+                        if(item!=null&&!item.optString("id").equals(group.optString("id")))kept.put(item);
+                    }
+                    BookOrganizer.save(this,kept);render();
+                }).show());
         }
         for(Book part:parts){
             LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.VERTICAL);
