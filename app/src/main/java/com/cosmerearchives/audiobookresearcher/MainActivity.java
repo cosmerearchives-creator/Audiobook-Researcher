@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
     private static final int MIC_PERMISSION = 202;
     private static final int WAKE_PERMISSION = 203;
     private boolean backgroundHandsFree;
+    private String section="library";
     private SpeechRecognizer wakeRecognizer;
     private boolean wakeEnabled=false;
     private boolean wakeRunning=false;
@@ -75,7 +76,7 @@ public class MainActivity extends Activity {
     private final android.content.ServiceConnection serviceConnection=new android.content.ServiceConnection(){
         @Override public void onServiceConnected(android.content.ComponentName name,android.os.IBinder binder){
             playback=((PlaybackService.LocalBinder)binder).service();bound=true;
-            if(playback.player!=null){player=playback.player;for(Book book:books)if(book.uri.equals(playback.uri)){active=book;break;}render();if(!getIntent().getBooleanExtra("libraryOnly",false))startActivity(new Intent(MainActivity.this,NowPlayingActivity.class));}
+            if(playback.player!=null){player=playback.player;for(Book book:books)if(book.uri.equals(playback.uri)){active=book;break;}render();if(getIntent().getBooleanExtra("openPlayer",false))startActivity(new Intent(MainActivity.this,NowPlayingActivity.class));}
         }
         @Override public void onServiceDisconnected(android.content.ComponentName name){bound=false;playback=null;player=null;}
     };
@@ -104,6 +105,8 @@ public class MainActivity extends Activity {
         getWindow().setNavigationBarColor(BG);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         prefs = getSharedPreferences("library", MODE_PRIVATE);
+        section=getIntent().getStringExtra("section");
+        if(section==null)section="library";
         restoreBooks();
         restoreNotes();
         backgroundHandsFree=prefs.getBoolean("backgroundHandsFree",false);
@@ -157,11 +160,15 @@ public class MainActivity extends Activity {
         scroll.setFillViewport(true); scroll.setBackgroundColor(BG);
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20),dp(28),dp(20),dp(30)); scroll.addView(root);
+        TextView toPlayer=button("‹  Now Playing",false);
+        root.addView(toPlayer);toPlayer.setOnClickListener(v->startActivity(new Intent(this,NowPlayingActivity.class)));
+        space(root,15);
         TextView heading = text("Audiobook Researcher", 28, true); root.addView(heading);
         space(root,7);
-        TextView sub = text("Your listening library",15,false);
+        TextView sub = text(section.equals("notes")?"Your bookmarked notes":section.equals("options")?"App & voice activation settings":"Your listening library",15,false);
         sub.setTextColor(0xFF807D77); root.addView(sub);
         space(root,12);
+        if(section.equals("library")){
         if(active!=null&&player!=null){
             TextView nowPlaying=button("▶  Return to full-screen player",true);
             nowPlaying.setTextSize(19);
@@ -206,11 +213,9 @@ public class MainActivity extends Activity {
             row.setOnClickListener(v -> openBook(book));
         }
         space(root,14);
+        }
+        if(section.equals("options")){
         if (active != null && player != null) {
-            TextView noteButton=button("+ Add bookmarked note",true);
-            root.addView(noteButton);
-            noteButton.setOnClickListener(v -> startNote());
-            space(root,10);
             TextView diagnostics=button("Wake detection settings & test",false);
             root.addView(diagnostics);
             diagnostics.setOnClickListener(v->openWakeDiagnostics());
@@ -235,6 +240,8 @@ public class MainActivity extends Activity {
             });
             space(root,18);
         }
+        }
+        if(section.equals("notes")){
         TextView notesHeading=text("Bookmarked notes",21,true);root.addView(notesHeading);
         space(root,10);
         int noteCount=0;
@@ -266,6 +273,8 @@ public class MainActivity extends Activity {
         }
         if(noteCount==0)root.addView(text(active==null?"Open an audiobook to view its notes.":"No notes for this audiobook yet.",14,false));
         space(root,18);
+        }
+        if(section.equals("options")){
         TextView updaterTitle = text("App updates",20,true); root.addView(updaterTitle);
         space(root,9);
         status=text("Checking for new versions…",14,true); root.addView(status);
@@ -287,6 +296,7 @@ public class MainActivity extends Activity {
         updater=new UpdateManager(this,status,updateProgress,updateDetails,installUpdate);
         updateButton.setOnClickListener(v->updater.check());
         updater.check();
+        }
         setContentView(scroll);
     }
     private void openWakeDiagnostics(){
@@ -303,13 +313,9 @@ public class MainActivity extends Activity {
             public void onStopTrackingTouch(SeekBar b){}
         });
         space(layout,10);
-        TextView gateLabel=text("Speech activity gate: "+prefs.getInt("wakeVoiceGate",30),14,true);layout.addView(gateLabel);
-        SeekBar gate=new SeekBar(this);gate.setMax(80);gate.setProgress(prefs.getInt("wakeVoiceGate",30));layout.addView(gate);
-        gate.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onStartTrackingTouch(SeekBar b){}
-            public void onProgressChanged(SeekBar b,int value,boolean user){gateLabel.setText("Speech activity gate: "+value);}
-            public void onStopTrackingTouch(SeekBar b){}
-        });
+        TextView gateLabel=text("Microphone activity diagnostics",14,true);layout.addView(gateLabel);
+
+
         TextView meter=text("Microphone level: --",14,false);layout.addView(meter);
         TextView counter=text("Successful detections: "+prefs.getInt("wakeDetections",0),14,false);layout.addView(counter);
         android.widget.CheckBox test=new android.widget.CheckBox(this);
@@ -317,7 +323,7 @@ public class MainActivity extends Activity {
         test.setChecked(prefs.getBoolean("wakeTestMode",false));layout.addView(test);
         final Runnable[] refresh=new Runnable[1];
         refresh[0]=()->{
-            meter.setText("Microphone level: "+prefs.getInt("wakeMicLevel",0)+" / 100"+(prefs.getBoolean("wakeDucked",false)?" • Audiobook ducked 80%":""));
+            meter.setText("Microphone level: "+prefs.getInt("wakeMicLevel",0)+" / 100");
             counter.setText("Successful detections: "+prefs.getInt("wakeDetections",0));
             handler.postDelayed(refresh[0],400);
         };
@@ -326,7 +332,6 @@ public class MainActivity extends Activity {
             .setView(layout)
             .setPositiveButton("Save",(d,w)->{
                 prefs.edit().putInt("wakeSensitivity",sensitivity.getProgress())
-                    .putInt("wakeVoiceGate",gate.getProgress())
                     .putBoolean("wakeTestMode",test.isChecked()).apply();
                 handler.removeCallbacks(refresh[0]);
                 if(backgroundHandsFree){
