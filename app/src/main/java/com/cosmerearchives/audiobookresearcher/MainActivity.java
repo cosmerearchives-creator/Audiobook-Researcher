@@ -774,6 +774,14 @@ public class MainActivity extends Activity {
                         book.folderUri=item.folderUri;book.coverUri=item.coverUri;
                         book.album=item.album;book.artist=item.artist;book.track=item.track;
                         books.add(book);added++;
+                    }else{
+                        for(Book book:books)if(book.uri.equals(item.uri)){
+                            if(!item.album.isEmpty())book.album=item.album;
+                            if(!item.artist.isEmpty())book.artist=item.artist;
+                            if(!item.track.isEmpty())book.track=item.track;
+                            if(book.coverUri.isEmpty()&&!item.coverUri.isEmpty())book.coverUri=item.coverUri;
+                            break;
+                        }
                     }
                 }
                 saveBooks();render();
