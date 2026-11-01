@@ -169,8 +169,8 @@ public class NowPlayingActivity extends Activity {
         // Match its bounds to the entire available square and keep the icon
         // and artwork non-clickable so touches reach the parent.
         middle.addView(coverButton,new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));
-        middle.addOnLayoutChangeListener((v,left,top,right,bottom,oldLeft,oldTop,oldRight,oldBottom)->{
-            int side=Math.min(right-left,bottom-top);
+        middle.addOnLayoutChangeListener((v,left,topEdge,right,bottom,oldLeft,oldTop,oldRight,oldBottom)->{
+            int side=Math.min(right-left,bottom-topEdge);
             FrameLayout.LayoutParams size=new FrameLayout.LayoutParams(side,side,Gravity.CENTER);
             coverButton.setLayoutParams(size);
         });
