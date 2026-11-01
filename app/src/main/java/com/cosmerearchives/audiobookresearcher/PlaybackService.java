@@ -25,8 +25,26 @@ public class PlaybackService extends Service {
     private AudioManager.OnAudioFocusChangeListener focusListener;
     private boolean resumeOnFocus;
     private final Handler wrapHandler=new Handler(Looper.getMainLooper());
+    private void storeProgress(boolean complete){
+        try{
+            android.content.SharedPreferences prefs=getSharedPreferences("library",0);
+            org.json.JSONArray books=new org.json.JSONArray(prefs.getString("books","[]"));
+            for(int i=0;i<books.length();i++){
+                org.json.JSONObject item=books.optJSONObject(i);
+                if(item!=null&&uri.equals(item.optString("uri"))){
+                    item.put("position",complete?duration():position());
+                    item.put("started",true);
+                    item.put("completed",complete);
+                    break;
+                }
+            }
+            prefs.edit().putString("books",books.toString()).apply();
+        }catch(Exception ignored){}
+    }
+
     private final Runnable wrappingTicker=new Runnable(){public void run(){
         if(player!=null&&isPlaying()){
+            storeProgress(false);
             int at=position(),adjusted=BookOrganizer.skipPosition(PlaybackService.this,uri,at,duration());
             if(adjusted>=duration()-250&&adjusted>at)advance();
             else if(adjusted>at+100)seek(adjusted);
@@ -34,6 +52,7 @@ public class PlaybackService extends Service {
         wrapHandler.postDelayed(this,500);
     }};
     private void advance(){
+        storeProgress(true);
         String next=BookOrganizer.next(this,uri);
         if(next==null){pause();return;}
         try{
@@ -111,6 +130,7 @@ public class PlaybackService extends Service {
     }
     void open(String source,String name,int at)throws Exception{
         if(player!=null){player.release();player=null;}
+        if(player!=null)storeProgress(false);
         uri=source;title=name;
         getSharedPreferences("library",0).edit().putString("lastBookUri",source).apply();
         MediaPlayer next=new MediaPlayer();
@@ -133,7 +153,7 @@ public class PlaybackService extends Service {
         audio.requestAudioFocus(focusListener,AudioManager.STREAM_MUSIC,AudioManager.AUDIOFOCUS_GAIN);
         player.start();refresh();
     }
-    void pause(){if(player!=null&&player.isPlaying())player.pause();refresh();}
+    void pause(){if(player!=null&&player.isPlaying()){player.pause();storeProgress(false);}refresh();}
     void toggle(){if(isPlaying())pause();else play();}
     private PendingIntent action(String name,int request){
         Intent i=new Intent(this,PlaybackService.class).setAction(name);
