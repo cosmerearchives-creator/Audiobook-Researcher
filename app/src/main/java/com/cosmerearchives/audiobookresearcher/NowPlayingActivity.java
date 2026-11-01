@@ -141,7 +141,11 @@ public class NowPlayingActivity extends Activity {
                 stopService(new Intent(this,HandsFreeService.class));
             }
             else if(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED){
-                if(HandsFreeService.serviceActive)stopService(new Intent(this,HandsFreeService.class));
+                if(HandsFreeService.serviceActive){
+                    startService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.RELOAD));
+                    handler.postDelayed(this::refresh,350);
+                    return;
+                }
                 try{
                     getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("bluetoothManualOff",false).apply();
                     startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));
@@ -252,11 +256,12 @@ public class NowPlayingActivity extends Activity {
         if(!displayedUri.equals(p.uri)){recreate();return;}
         if(play!=null)play.setText(p.isPlaying()?"❚❚":"▶");
         if(microphone!=null){
-            boolean enabled=HandsFreeService.serviceActive && !HandsFreeService.listeningState.startsWith("Error:");
+            String error=getSharedPreferences("library",MODE_PRIVATE).getString("wakeLastError","");
+            boolean enabled=HandsFreeService.serviceActive && error.isEmpty() && !HandsFreeService.listeningState.startsWith("Error:");
             if(enabled)voiceStartRequested=false;
             microphone.setAlpha(1f);
             microphone.setText(enabled?"🎙":"🎙");
-            microphone.setContentDescription(enabled?"Voice activation on. Tap to stop.":HandsFreeService.listeningState.startsWith("Error:")?"Voice activation error. Tap to retry.":"Voice activation off. Tap to start.");
+            microphone.setContentDescription(enabled?"Voice activation on. Tap to stop.":!error.isEmpty()?"Voice activation error: "+error+". Tap to retry.":"Voice activation off. Tap to start.");
             microphone.setCompoundDrawablesWithIntrinsicBounds(0,0,0,0);
             microphone.setForeground(enabled?null:new android.graphics.drawable.Drawable(){
                 private final android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
