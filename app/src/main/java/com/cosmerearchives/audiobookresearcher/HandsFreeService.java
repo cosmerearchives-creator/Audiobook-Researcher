@@ -35,6 +35,7 @@ public class HandsFreeService extends Service {
     }
     static volatile boolean serviceActive=false;
     static volatile String listeningState="Off";
+    static volatile String lastStartError="";
     private long speechAt, recordingStart;
     private String bookUri;
     private int timestamp;
@@ -71,6 +72,7 @@ public class HandsFreeService extends Service {
                 stopSelf();return START_NOT_STICKY;
             }
             enabled=true;
+            lastStartError="";
             serviceActive=true;listeningState="Starting";
             getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("backgroundHandsFree",true).apply();
             showNotification("Offline listening for Bookmark");
@@ -102,7 +104,7 @@ public class HandsFreeService extends Service {
         showNotification("Offline listening for Bookmark");
         detector=new OfflineBookmarkDetector(this,
             ()->{if(!enabled||!listening)return;listening=false;capture();},
-            error->{listening=false;listeningState="Error: "+error;showNotification("Microphone error: "+error);scheduleRestart();},
+            error->{listening=false;lastStartError=error;listeningState="Error: "+error;showNotification("Microphone error: "+error);scheduleRestart();},
             level->receivedLevel(level)
         );
         detector.start();
