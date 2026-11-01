@@ -125,3 +125,25 @@ Android restricts launching microphone foreground services from the background, 
 ## Audiobooks folder import
 
 In Media Library select **Choose Audiobooks folder** using Android's system folder picker. The app keeps persistent read access to that tree and scans its subfolders for common audiobook audio formats, adds them to the library, and uses nearby cover/folder/front image files when present. **Scan Audiobooks folder** finds newly added files without replacing positions or duplicating existing document URIs. Each discovered audio file is currently an individual library entry; multi-file/part-based audiobook grouping is not yet implemented. Actual playback depends on device codec support.
+
+## Custom books and wrapping
+
+Media Library now offers Create Book. Choose existing scanned audio parts, give
+the collection a book title, then arrange its order. Custom groups override
+metadata grouping; groups start collapsed, and expanding shows parts, per-part
+playback status, wrapping editors, and an ungroup action. Ungrouping preserves
+the source files and notes.
+
+A wrapping editor for each part can skip the entire part during continuous
+playback, or skip one or more time ranges entered in seconds (e.g.
+`0-45, 3500-3560`). Options includes an Include wrapping switch to hear the
+original material. Manually opening an entirely wrapped part remains possible.
+The service automatically advances through ordered parts within a custom book,
+saves part progress, and updates the player title/cover between parts.
+
+Known limits: custom books currently select scanned audio files rather than
+folder containers; selecting all files from several folders achieves a similar
+group. Timed regions use seconds rather than a visual waveform editor. Metadata
+album groups stay collapsed by default but do not auto-advance unless manually
+assembled into a custom book. A successful CI build and on-device playback
+validation have not yet been confirmed.
