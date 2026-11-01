@@ -10,7 +10,7 @@ import com.k2fsa.sherpa.onnx.*
 import kotlin.concurrent.thread
 
 /** Single-purpose, offline 16 kHz Bookmark detector. */
-class OfflineBookmarkDetector(private val context: Context, private val onDetected: () -> Unit, private val onError: (String) -> Unit) {
+class OfflineBookmarkDetector(private val context: Context, private val onDetected: Runnable, private val onError: java.util.function.Consumer<String>) {
     @Volatile private var running = false
     private var worker: Thread? = null
     private var microphone: AudioRecord? = null
@@ -22,6 +22,7 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
         worker = thread(name = "offline-bookmark-detector") {
             var spotter: KeywordSpotter? = null
             var stream: OnlineStream? = null
+            var detected = false
             try {
                 val dir = "sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01"
                 val config = KeywordSpotterConfig(
@@ -58,13 +59,13 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                         val result = spotter.getResult(stream).keyword
                         if (result.isNotBlank()) {
                             running = false
-                            main.post(onDetected)
+                            detected = true
                             break
                         }
                     }
                 }
             } catch (e: Exception) {
-                if (running) main.post { onError(e.message ?: e.javaClass.simpleName) }
+                if (running) main.post { onError.accept(e.message ?: e.javaClass.simpleName) }
             } finally {
                 try { microphone?.stop() } catch (_: Exception) {}
                 microphone?.release()
@@ -72,6 +73,7 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                 stream?.release()
                 spotter?.release()
                 running = false
+                if (detected) main.post { onDetected.run() }
             }
         }
     }
