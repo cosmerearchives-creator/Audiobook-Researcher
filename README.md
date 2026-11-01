@@ -69,3 +69,16 @@ No new APK or cloud service is intended for subsequent phrase edits.
 sherpa model and confirm live microphone detection, false-trigger rates,
 background listening, and the GitHub Actions build on a device. This feature
 has been pushed but has not yet been verified as a working signed APK.
+
+## Wake-word tuning and audiobook auto-ducking
+
+The audiobook player's **Wake detection settings & test** panel now offers:
+- Detection sensitivity (0–100), mapped to sherpa-onnx's keyword threshold.
+- Speech activity gate (0–80), controlling when voice activity causes audio ducking.
+- Live microphone level sampled from the 16 kHz wake-word microphone stream.
+- Number of successful wake-word detections.
+- A test mode that counts wake-word detections without recording notes or pausing playback.
+
+During hands-free listening, sufficiently strong microphone activity can temporarily lower the **app's own audiobook playback volume by 80%** (to 20% original). Volume returns when activity subsides, on successful detection, when recording stops, or when the listening service shuts down. This does **not** change the phone's system-wide media volume. A cooldown reduces rapid volume pumping. The activity gate is a basic amplitude heuristic, not speaker isolation: audiobook narration or road noise may trigger it. Tuning sliders take effect after restarting hands-free listening; the settings panel stops an active session when saved.
+
+The above controls are committed but require CI and on-device verification. Avoid driving while interacting with the diagnostic screen.
