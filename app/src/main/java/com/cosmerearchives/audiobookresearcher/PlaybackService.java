@@ -111,7 +111,7 @@ public class PlaybackService extends Service {
         session.setPlaybackState(new PlaybackState.Builder().setActions(commands).setState(flags,position(),isPlaying()?1:0).build());
         session.setMetadata(new MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE,title)
             .putLong(MediaMetadata.METADATA_KEY_DURATION,duration()).build());
-        Intent open=new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        Intent open=new Intent(this,NowPlayingActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent content=PendingIntent.getActivity(this,0,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification.Action back=new Notification.Action.Builder(android.R.drawable.ic_media_previous,"Back 15 seconds",action(ACTION_BACK,1)).build();
         Notification.Action toggle=new Notification.Action.Builder(isPlaying()?android.R.drawable.ic_media_pause:android.R.drawable.ic_media_play,
