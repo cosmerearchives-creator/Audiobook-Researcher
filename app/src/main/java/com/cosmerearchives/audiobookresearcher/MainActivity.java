@@ -75,7 +75,7 @@ public class MainActivity extends Activity {
     private final android.content.ServiceConnection serviceConnection=new android.content.ServiceConnection(){
         @Override public void onServiceConnected(android.content.ComponentName name,android.os.IBinder binder){
             playback=((PlaybackService.LocalBinder)binder).service();bound=true;
-            if(playback.player!=null){player=playback.player;for(Book book:books)if(book.uri.equals(playback.uri)){active=book;break;}render();}
+            if(playback.player!=null){player=playback.player;for(Book book:books)if(book.uri.equals(playback.uri)){active=book;break;}render();if(!getIntent().getBooleanExtra("libraryOnly",false))startActivity(new Intent(MainActivity.this,NowPlayingActivity.class));}
         }
         @Override public void onServiceDisconnected(android.content.ComponentName name){bound=false;playback=null;player=null;}
     };
@@ -162,58 +162,12 @@ public class MainActivity extends Activity {
         TextView sub = text("Your listening library",15,false);
         sub.setTextColor(0xFF807D77); root.addView(sub);
         space(root,12);
-        if(active!=null&&player!=null) {
-            LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
-            hero.setGravity(Gravity.CENTER);hero.setPadding(dp(14),dp(16),dp(14),dp(16));
-            hero.setBackground(shape(Color.WHITE,20,0xFFE0DDD8));
-            if(!active.coverUri.isEmpty()){
-                try{
-                    ImageView art=new ImageView(this);
-                    art.setImageURI(Uri.parse(active.coverUri));
-                    art.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                    art.setBackground(shape(0xFFEAE5EF,16,0));
-                    art.setClipToOutline(true);
-                    hero.addView(art,new LinearLayout.LayoutParams(-1,dp(210)));
-                    space(hero,12);
-                }catch(Exception ignored){}
-            }
-            TextView bookName=text(active.title,20,true);bookName.setGravity(Gravity.CENTER);
-            hero.addView(bookName);space(hero,10);
-            seek=new SeekBar(this);seek.setMax(Math.max(1,player.getDuration()));
-            seek.setProgress(active.position);seek.setProgressTintList(ColorStateList.valueOf(PURPLE));
-            hero.addView(seek);
-            seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-                public void onStartTrackingTouch(SeekBar bar){tracking=true;}
-                public void onProgressChanged(SeekBar bar,int p,boolean user){}
-                public void onStopTrackingTouch(SeekBar bar){tracking=false;seekTo(bar.getProgress());}
-            });
-            progress=text(format(active.position)+" / "+format(player.getDuration()),15,false);
-            progress.setGravity(Gravity.CENTER);hero.addView(progress);space(hero,14);
-            LinearLayout controls=new LinearLayout(this);controls.setGravity(Gravity.CENTER);
-            TextView back=button("↶ 15",false);
-            playButton=button(player.isPlaying()?"❚❚  Pause":"▶  Play",true);
-            TextView forward=button("30 ↷",false);
-            TextView[] controlsArray={back,playButton,forward};
-            for(int n=0;n<3;n++){
-                LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(78),n==1?1.5f:1f);
-                params.setMargins(dp(3),0,dp(3),0);
-                controlsArray[n].setTextSize(n==1?19:17);
-                controls.addView(controlsArray[n],params);
-            }
-            back.setOnClickListener(v->seekTo(player.getCurrentPosition()-15000));
-            forward.setOnClickListener(v->seekTo(player.getCurrentPosition()+30000));
-            playButton.setOnClickListener(v->toggle());hero.addView(controls);
-            space(hero,12);
-            TextView coverButton=button(active.coverUri.isEmpty()?"Find cover in audiobook folder":"Change cover folder",false);
-            hero.addView(coverButton);
-            coverButton.setOnClickListener(v->{
-                Intent folder=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-                folder.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-                startActivityForResult(folder,PICK_COVER_FOLDER);
-            });
-            TextView full=button("Open full-screen player",true);
-            full.setOnClickListener(v->startActivity(new Intent(this,NowPlayingActivity.class)));
-            hero.addView(full);root.addView(hero);space(root,18);
+        if(active!=null&&player!=null){
+            TextView nowPlaying=button("▶  Return to full-screen player",true);
+            nowPlaying.setTextSize(19);
+            root.addView(nowPlaying,new LinearLayout.LayoutParams(-1,dp(78)));
+            nowPlaying.setOnClickListener(v->startActivity(new Intent(this,NowPlayingActivity.class)));
+            space(root,18);
         }
         TextView importButton = button("+ Import audiobook",true);
         root.addView(importButton);
