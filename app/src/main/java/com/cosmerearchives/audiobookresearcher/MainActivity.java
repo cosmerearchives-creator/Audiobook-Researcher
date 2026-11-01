@@ -383,6 +383,12 @@ public class MainActivity extends Activity {
         }
         if(section.equals("options")){
         {
+            android.widget.CheckBox automaticBluetooth=new android.widget.CheckBox(this);
+            automaticBluetooth.setText("Automatically start voice activation when Bluetooth connects (experimental)");
+            automaticBluetooth.setChecked(prefs.getBoolean("bluetoothAutoVoiceEnabled",false));
+            automaticBluetooth.setOnCheckedChangeListener((control,checked)->
+                prefs.edit().putBoolean("bluetoothAutoVoiceEnabled",checked).apply());
+            root.addView(automaticBluetooth);space(root,10);
             android.widget.CheckBox includeWrapping=new android.widget.CheckBox(this);
             includeWrapping.setText("Include wrapping chapters and sections");
             includeWrapping.setChecked(prefs.getBoolean("includeWrapping",false));
