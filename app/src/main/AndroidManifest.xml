@@ -10,6 +10,7 @@
         <service android:name=".HandsFreeService" android:exported="false" android:foregroundServiceType="microphone" />
         <service android:name=".PlaybackService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
         <activity android:name=".NowPlayingActivity" android:exported="false" />
+        <activity android:name=".RecognitionTestActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
