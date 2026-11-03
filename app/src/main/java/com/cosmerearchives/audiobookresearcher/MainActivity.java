@@ -477,6 +477,12 @@ public class MainActivity extends Activity {
             root.addView(lifecycle);space(root,8);
             TextView startup=text("Voice engine stage: "+prefs.getString("wakeStartupStage","not started"),15,true);
             root.addView(startup);
+            TextView rawKeyword=text("Last detected keyword: "+prefs.getString("wakeLastRawKeyword","none")+
+                " ("+prefs.getString("wakeLastKeywordMatch","not yet tested")+")",14,false);
+            root.addView(rawKeyword);
+            TextView otherKeywordCount=text("Other keywords detected and ignored: "+
+                prefs.getInt("wakeOtherKeywordDetections",0),14,false);
+            root.addView(otherKeywordCount);space(root,8);
             TextView lastWake=text("Voice engine error: "+prefs.getString("wakeLastError","none recorded"),13,false);
             lastWake.setTextIsSelectable(true);
             root.addView(lastWake);space(root,12);
