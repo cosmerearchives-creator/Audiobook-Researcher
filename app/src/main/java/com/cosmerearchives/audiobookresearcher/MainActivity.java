@@ -395,7 +395,11 @@ public class MainActivity extends Activity {
             root.addView(includeWrapping);
             includeWrapping.setOnCheckedChangeListener((view,checked)->prefs.edit().putBoolean("includeWrapping",checked).apply());
             space(root,10);
-            TextView diagnostics=button("Wake detection settings & test",false);
+            TextView recognitionTest=button("Run wake phrase recognition test",true);
+            root.addView(recognitionTest);
+            recognitionTest.setOnClickListener(v->startActivity(new Intent(this,RecognitionTestActivity.class)));
+            space(root,10);
+            TextView diagnostics=button("Wake detection settings & diagnostics",false);
             root.addView(diagnostics);
             diagnostics.setOnClickListener(v->openWakeDiagnostics());
             space(root,10);
