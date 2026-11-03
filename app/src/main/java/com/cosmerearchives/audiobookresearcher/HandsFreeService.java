@@ -130,19 +130,26 @@ public class HandsFreeService extends Service {
         if(enabled)handler.postDelayed(restart,1200);
     }
     private void capture(){
-        PlaybackService playback=PlaybackService.instance;
-        if(playback==null||playback.player==null){scheduleRestart();return;}
-        bookUri=playback.uri;timestamp=playback.position();resume=playback.isPlaying();
         android.content.SharedPreferences debug=getSharedPreferences("library",MODE_PRIVATE);
-        debug.edit().putInt("wakeDetections",debug.getInt("wakeDetections",0)+1).apply();
-        if(detector!=null){detector.stop();detector=null;}
-        listening=false;
+        // Test-only detections must work even if no audiobook is loaded.
+        // They must never pause playback or save voice-note files.
         if(debug.getBoolean("wakeTestMode",false)){
+            debug.edit().putInt("wakeDetections",debug.getInt("wakeDetections",0)+1)
+                .putLong("wakeLastDetectionAt",System.currentTimeMillis()).apply();
+            if(detector!=null){detector.stop();detector=null;}
+            listening=false;
             listeningState="Test phrase detected";
             beepReady();
             showNotification("Test detection succeeded • listening");
             scheduleRestart();return;
         }
+        PlaybackService playback=PlaybackService.instance;
+        if(playback==null||playback.player==null){scheduleRestart();return;}
+        bookUri=playback.uri;timestamp=playback.position();resume=playback.isPlaying();
+        debug.edit().putInt("wakeDetections",debug.getInt("wakeDetections",0)+1)
+            .putLong("wakeLastDetectionAt",System.currentTimeMillis()).apply();
+        if(detector!=null){detector.stop();detector=null;}
+        listening=false;
         listeningState="Ready for voice note";
         playback.pause();
         beepReady();
