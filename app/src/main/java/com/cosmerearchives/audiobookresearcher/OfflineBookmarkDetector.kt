@@ -76,10 +76,25 @@ class OfflineBookmarkDetector(private val context: Context, private val onDetect
                     while (running && spotter.isReady(stream)) {
                         spotter.decode(stream)
                         val result = spotter.getResult(stream).keyword
-                        if (result.isNotBlank() && result.trim().uppercase(Locale.ROOT).replace("_", " ") == normalizedPhrase) {
-                            running = false
-                            detected = true
-                            break
+                        if (result.isNotBlank()) {
+                            val observedKeyword=result.trim().uppercase(Locale.ROOT)
+                                .replace("_", " ").replace(Regex("\\s+"), " ")
+                            val isMatch=observedKeyword==normalizedPhrase
+                            val preferences=context.getSharedPreferences("library",Context.MODE_PRIVATE)
+                            preferences.edit()
+                                .putString("wakeLastRawKeyword", result)
+                                .putString("wakeLastKeywordMatch", if(isMatch)"matched" else "ignored")
+                                .putInt("wakeOtherKeywordDetections",
+                                    preferences.getInt("wakeOtherKeywordDetections",0)+(if(isMatch)0 else 1))
+                                .apply()
+                            // A decoded keyword consumes the active path. Without resetting,
+                            // rejected built-in keywords can block subsequent target matches.
+                            if(isMatch){
+                                running=false
+                                detected=true
+                                break
+                            }
+                            spotter.reset(stream)
                         }
                     }
                 }
