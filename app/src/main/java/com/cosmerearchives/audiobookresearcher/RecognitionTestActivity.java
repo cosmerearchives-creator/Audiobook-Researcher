@@ -115,11 +115,10 @@ public class RecognitionTestActivity extends Activity {
         sensitivity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             public void onProgressChanged(SeekBar bar,int value,boolean user){
                 sensitivityLabel.setText("Sensitivity: "+value+"%");
-                if(user){prefs.edit().putInt("wakeSensitivity",value).apply();
-                    if(running)requestReload();}
+                if(user)prefs.edit().putInt("wakeSensitivity",value).apply();
             }
             public void onStartTrackingTouch(SeekBar bar){}
-            public void onStopTrackingTouch(SeekBar bar){}
+            public void onStopTrackingTouch(SeekBar bar){if(running)requestReload();}
         });
         gap(content,12);
         content.addView(text("Higher sensitivity may catch more spoken phrases, but also increases false activations. Compare results using the same microphone and listening conditions.",13,false));
