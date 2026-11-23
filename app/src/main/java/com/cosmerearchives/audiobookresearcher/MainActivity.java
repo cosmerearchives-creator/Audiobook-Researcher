@@ -219,6 +219,18 @@ public class MainActivity extends Activity {
         startRequestedVoiceNote();
     }
 
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus) return;
+        handler.postDelayed(() -> {
+            if (hasWindowFocus() && canStartVoiceNote && pendingBookUri == null
+                    && AssistantOverlayDiagnostics.consumeOverlay(this)) {
+                voiceNoteRequested = true;
+                startRequestedVoiceNote();
+            }
+        }, 350);
+    }
+
     @Override protected void onSaveInstanceState(Bundle state) {
         super.onSaveInstanceState(state);
         state.putBoolean("voiceNoteRequested",voiceNoteRequested);
@@ -240,6 +252,8 @@ public class MainActivity extends Activity {
         pendingPosition=playback.position();
         resumeAfterNote=playback.pauseForNote();
         autoSaveDictation=true;
+        section="notes";
+        render();
         dictateNote();
     }
 
@@ -425,6 +439,14 @@ public class MainActivity extends Activity {
         }
         if(section.equals("options")){
         {
+            android.widget.CheckBox geminiDictation=new android.widget.CheckBox(this);
+            geminiDictation.setText("Dictate when returning from Gemini during playback");
+            geminiDictation.setChecked(prefs.getBoolean(AssistantOverlayDiagnostics.DICTATE_AFTER_GEMINI,false));
+            geminiDictation.setOnCheckedChangeListener((view,checked)->
+                prefs.edit().putBoolean(AssistantOverlayDiagnostics.DICTATE_AFTER_GEMINI,checked).apply());
+            root.addView(geminiDictation);
+            root.addView(text("Requires Codex assistant overlay test in Android Accessibility.",14,false));
+            space(root,10);
             android.widget.CheckBox captureOnOpen=new android.widget.CheckBox(this);
             captureOnOpen.setText("Start a dictated note when opening Codex during playback");
             captureOnOpen.setChecked(prefs.getBoolean(OPEN_TO_DICTATE,false));

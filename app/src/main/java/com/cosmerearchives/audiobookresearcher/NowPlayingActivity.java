@@ -192,6 +192,21 @@ public class NowPlayingActivity extends Activity {
         if(remaining!=null)remaining.setText(format(p.duration()));
         if(seek!=null&&!dragging){seek.setMax(Math.max(1,p.duration()));seek.setProgress(p.position());}
     }
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus) return;
+        handler.postDelayed(() -> {
+            if (!isFinishing() && !isDestroyed() && hasWindowFocus()
+                    && AssistantOverlayDiagnostics.consumeOverlay(this)) {
+                startActivity(new Intent(this, MainActivity.class)
+                    .setAction(MainActivity.ACTION_NOTE)
+                    .putExtra("section", "notes")
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+                finish();
+            }
+        }, 350);
+    }
+
     private void noteLifecycle(String event){
         getSharedPreferences("library",MODE_PRIVATE).edit()
             .putString("playerLifecycle",event+" • "+new java.text.SimpleDateFormat("HH:mm:ss.SSS",java.util.Locale.US).format(new java.util.Date()))
