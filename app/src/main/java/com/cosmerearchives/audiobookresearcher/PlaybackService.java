@@ -148,10 +148,27 @@ public class PlaybackService extends Service {
     int duration(){try{return player==null?0:player.getDuration();}catch(Exception e){return 0;}}
     boolean isPlaying(){try{return player!=null&&player.isPlaying();}catch(Exception e){return false;}}
     void seek(int p){if(player!=null){player.seekTo(Math.max(0,Math.min(p,duration())));refresh();}}
+    float speed(){
+        return getSharedPreferences("library",MODE_PRIVATE).getFloat("playbackSpeed",1f);
+    }
+    boolean setSpeed(float speed){
+        try{
+            if(isPlaying())player.setPlaybackParams(player.getPlaybackParams().setSpeed(speed));
+            getSharedPreferences("library",MODE_PRIVATE).edit().putFloat("playbackSpeed",speed).apply();
+            refresh();
+            return true;
+        }catch(IllegalArgumentException | IllegalStateException ignored){return false;}
+    }
     void play(){
         if(player==null)return;
         audio.requestAudioFocus(focusListener,AudioManager.STREAM_MUSIC,AudioManager.AUDIOFOCUS_GAIN);
-        player.start();refresh();
+        player.start();
+        try{
+            float speed=speed();
+            if(player.getPlaybackParams().getSpeed()!=speed)
+                player.setPlaybackParams(player.getPlaybackParams().setSpeed(speed));
+        }catch(IllegalArgumentException | IllegalStateException ignored){}
+        refresh();
     }
     boolean wasPlayingBeforeNote() {
         return isPlaying() || resumeOnFocus;
@@ -176,7 +193,7 @@ public class PlaybackService extends Service {
         if(isPlaying())flags=PlaybackState.STATE_PLAYING;
         long commands=PlaybackState.ACTION_PLAY|PlaybackState.ACTION_PAUSE|PlaybackState.ACTION_PLAY_PAUSE|
             PlaybackState.ACTION_SEEK_TO|PlaybackState.ACTION_SKIP_TO_NEXT|PlaybackState.ACTION_SKIP_TO_PREVIOUS;
-        session.setPlaybackState(new PlaybackState.Builder().setActions(commands).setState(flags,position(),isPlaying()?1:0).build());
+        session.setPlaybackState(new PlaybackState.Builder().setActions(commands).setState(flags,position(),isPlaying()?speed():0).build());
         session.setMetadata(new MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE,title)
             .putLong(MediaMetadata.METADATA_KEY_DURATION,duration()).build());
         Intent open=new Intent(this,NowPlayingActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
