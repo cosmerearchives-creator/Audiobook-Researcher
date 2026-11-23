@@ -44,6 +44,7 @@ public class MainActivity extends Activity {
     private static final int MIC_PERMISSION = 202;
     private String section="library";
     private Runnable buttonTestTicker;
+    private TextView lastLaunchDetails;
     private ScrollView libraryScroll;
     private TextView scanRefreshButton;
     private int pendingLibraryScroll=-1;
@@ -310,6 +311,7 @@ public class MainActivity extends Activity {
         startActivity(new Intent(this,NowPlayingActivity.class));
     }
     private void render() {
+        lastLaunchDetails=null;
         if(notePlayer!=null)stopNotePlayer();
         ScrollView scroll = new ScrollView(this);
         if(section.equals("library"))libraryScroll=scroll;
@@ -486,6 +488,13 @@ public class MainActivity extends Activity {
         space(root,18);
         }
         if(section.equals("tools")){
+            root.addView(text("Last launch",21,true));
+            space(root,6);
+            lastLaunchDetails=text("",14,false);
+            lastLaunchDetails.setTextIsSelectable(true);
+            root.addView(lastLaunchDetails);
+            refreshLastLaunch();
+            space(root,12);
             TextView lifecycle=text("Player lifecycle: "+prefs.getString("playerLifecycle","not recorded"),14,true);
             root.addView(lifecycle);space(root,8);
             TextView crashTitle=text("Startup & crash diagnostics",21,true);
@@ -1081,7 +1090,14 @@ public class MainActivity extends Activity {
             }catch(Exception e){android.util.Log.e("AudiobookLibrary","Cannot save books",e);}
         }
     }
-    @Override protected void onResume(){super.onResume();if(buttonTestTicker!=null&&section.equals("tools"))handler.post(buttonTestTicker);if(updater!=null)updater.onResume();if(prefs!=null){notes.clear();restoreNotes();}}
+    private void refreshLastLaunch(){
+        if(lastLaunchDetails!=null){
+            lastLaunchDetails.setText(prefs.getString(CodexLauncherActivity.LAST_LAUNCH,
+                "No launch recorded yet. Open Codex from your home screen."));
+        }
+    }
+
+    @Override protected void onResume(){super.onResume();refreshLastLaunch();if(buttonTestTicker!=null&&section.equals("tools"))handler.post(buttonTestTicker);if(updater!=null)updater.onResume();if(prefs!=null){notes.clear();restoreNotes();}}
     @Override protected void onPause(){canStartVoiceNote=false;if(buttonTestTicker!=null)handler.removeCallbacks(buttonTestTicker);super.onPause();saveBooks();}
     @Override protected void onDestroy(){stopNotePlayer();if(recording)finishRecording(false);if(tts!=null)tts.shutdown();if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
 }
