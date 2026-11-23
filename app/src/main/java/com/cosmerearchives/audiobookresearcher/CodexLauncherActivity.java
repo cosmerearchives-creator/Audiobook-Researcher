@@ -49,7 +49,8 @@ public class CodexLauncherActivity extends Activity {
     private void openCodex(Intent intent) {
 
         PlaybackService playback = PlaybackService.instance;
-        boolean noteRequested = MainActivity.ACTION_NOTE.equals(intent.getAction());
+        boolean noteRequested = AssistantOverlayDiagnostics.claimForLauncher(this)
+            || MainActivity.ACTION_NOTE.equals(intent.getAction());
         boolean captureOnOpen = getSharedPreferences("library", MODE_PRIVATE)
             .getBoolean(MainActivity.OPEN_TO_DICTATE, false);
         if (captureOnOpen && playback != null && playback.wasPlayingBeforeNote()) {

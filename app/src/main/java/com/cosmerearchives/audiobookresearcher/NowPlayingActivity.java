@@ -192,6 +192,11 @@ public class NowPlayingActivity extends Activity {
         if(remaining!=null)remaining.setText(format(p.duration()));
         if(seek!=null&&!dragging){seek.setMax(Math.max(1,p.duration()));seek.setProgress(p.position());}
     }
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if(hasFocus) AssistantOverlayDiagnostics.onForegroundWindowFocused(this);
+    }
+
     private void openGeminiDictation() {
         startActivity(new Intent(this, MainActivity.class)
             .setAction(MainActivity.ACTION_NOTE)

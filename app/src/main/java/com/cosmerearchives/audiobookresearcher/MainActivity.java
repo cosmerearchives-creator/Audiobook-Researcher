@@ -224,6 +224,7 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         if(ACTION_NOTE.equals(intent.getAction()) && pendingBookUri==null){
             voiceNoteRequested=true;
+            startRequestedVoiceNote();
         }
     }
 
@@ -238,6 +239,11 @@ public class MainActivity extends Activity {
                 voiceNoteRequested = true;
                 startRequestedVoiceNote();
             });
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if(hasFocus) AssistantOverlayDiagnostics.onForegroundWindowFocused(this);
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
@@ -970,6 +976,7 @@ public class MainActivity extends Activity {
         }
         dictation=new BookmarkDictation(this, handler, format(pendingPosition), this::finishBookmarkDictation);
         dictation.show();
+        AssistantOverlayDiagnostics.recordHandoff(this,"Dictation dialog opened from "+section);
     }
 
     private void finishBookmarkDictation(String transcript) {

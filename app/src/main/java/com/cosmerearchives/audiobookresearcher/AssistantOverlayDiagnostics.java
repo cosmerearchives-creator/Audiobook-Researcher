@@ -20,7 +20,7 @@ public class AssistantOverlayDiagnostics extends AccessibilityService {
     private static final String GEMINI_OVERLAY =
         "com.google.android.apps.search.assistant.surfaces.voice.robin.ui.floaty.activity.FloatyActivity";
     private static final int MAX_EVENTS = 12;
-    private static final long OVERLAY_HANDOFF_MS = 8000;
+    private static final long OVERLAY_HANDOFF_MS = 20000;
     private static final long DUPLICATE_EVENT_MS = 1000;
     private static long overlayAt = -1;
     private static boolean overlayConsumed = true;
@@ -44,6 +44,25 @@ public class AssistantOverlayDiagnostics extends AccessibilityService {
         readyToDictate = null;
         startNote = null;
         handoffHandler.removeCallbacks(checkHandoff);
+    }
+
+    static void onForegroundWindowFocused(Activity activity) {
+        if (foregroundActivity == activity) scheduleHandoff();
+    }
+
+    static boolean hasPendingOverlay(Context context) {
+        return !overlayConsumed && SystemClock.uptimeMillis() - overlayAt <= OVERLAY_HANDOFF_MS
+            && context.getSharedPreferences("library", MODE_PRIVATE)
+                .getBoolean(DICTATE_AFTER_GEMINI, false);
+    }
+
+    static boolean claimForLauncher(Context context) {
+        if (!hasPendingOverlay(context)) return false;
+        PlaybackService playback = PlaybackService.instance;
+        if (playback == null || playback.player == null || playback.uri == null) return false;
+        overlayConsumed = true;
+        recordHandoff(context, "Gemini detected, routing launcher to dictation");
+        return true;
     }
 
     private static void scheduleHandoff() {
@@ -81,7 +100,7 @@ public class AssistantOverlayDiagnostics extends AccessibilityService {
         return true;
     }
 
-    private static void recordHandoff(Context context, String status) {
+    static void recordHandoff(Context context, String status) {
         String timestamp = new SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(new Date());
         context.getSharedPreferences("library", MODE_PRIVATE).edit()
             .putString(HANDOFF_STATUS, timestamp + " • " + status).apply();
@@ -98,8 +117,7 @@ public class AssistantOverlayDiagnostics extends AccessibilityService {
         String entry = new SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(new Date())
             + " • " + packageName + " / " + (className == null ? "Unknown window class" : className);
         var prefs = getSharedPreferences("library", MODE_PRIVATE);
-        if ("com.google.android.googlequicksearchbox".equals(packageName)
-                && GEMINI_OVERLAY.contentEquals(className == null ? "" : className)
+        if (GEMINI_OVERLAY.contentEquals(className == null ? "" : className)
                 && prefs.getBoolean(DICTATE_AFTER_GEMINI, false)) {
             long now = SystemClock.uptimeMillis();
             if (overlayAt < 0 || now - overlayAt > DUPLICATE_EVENT_MS) {
