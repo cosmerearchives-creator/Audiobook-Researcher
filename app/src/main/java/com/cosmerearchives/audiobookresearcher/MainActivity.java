@@ -41,6 +41,9 @@ public class MainActivity extends Activity {
     private static final int PICK_AUDIOBOOK_FOLDER = 205;
     private static final int PICK_COVER_FOLDER = 204;
     private static final int DICTATE_NOTE = 201;
+    private static final int DICTATION_PERMISSION = 206;
+    private BookmarkDictation dictation;
+    private boolean requestingDictationPermission;
     private static final int MIC_PERMISSION = 202;
     private String section="library";
     private Runnable buttonTestTicker;
@@ -159,6 +162,7 @@ public class MainActivity extends Activity {
                 }
             }
             startRequestedVoiceNote();
+            if(canStartVoiceNote && autoSaveDictation && pendingBookUri!=null) openBookmarkDictation();
         }
         @Override public void onServiceDisconnected(android.content.ComponentName name){bound=false;playback=null;player=null;}
     };
@@ -196,6 +200,7 @@ public class MainActivity extends Activity {
         }else{
             voiceNoteRequested=state.getBoolean("voiceNoteRequested");
             autoSaveDictation=state.getBoolean("autoSaveDictation");
+            requestingDictationPermission=state.getBoolean("requestingDictationPermission");
             pendingBookUri=state.getString("pendingBookUri");
             pendingPosition=state.getInt("pendingPosition");
             resumeAfterNote=state.getBoolean("resumeAfterNote");
@@ -217,6 +222,7 @@ public class MainActivity extends Activity {
         super.onPostResume();
         canStartVoiceNote=true;
         startRequestedVoiceNote();
+        if(autoSaveDictation && pendingBookUri!=null && playback!=null) openBookmarkDictation();
         checkForGeminiNote();
     }
 
@@ -238,6 +244,7 @@ public class MainActivity extends Activity {
         super.onSaveInstanceState(state);
         state.putBoolean("voiceNoteRequested",voiceNoteRequested);
         state.putBoolean("autoSaveDictation",autoSaveDictation);
+        state.putBoolean("requestingDictationPermission",requestingDictationPermission);
         state.putString("pendingBookUri",pendingBookUri);
         state.putInt("pendingPosition",pendingPosition);
         state.putBoolean("resumeAfterNote",resumeAfterNote);
@@ -257,7 +264,7 @@ public class MainActivity extends Activity {
         autoSaveDictation=true;
         section="notes";
         render();
-        dictateNote();
+        openBookmarkDictation();
     }
 
     private final Runnable ticker = new Runnable() {
@@ -691,18 +698,50 @@ public class MainActivity extends Activity {
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
         super.onRequestPermissionsResult(request,permissions,results);
+        if(request==DICTATION_PERMISSION){
+            requestingDictationPermission=false;
+            if(results.length>0 && results[0]==PackageManager.PERMISSION_GRANTED){
+                if(canStartVoiceNote && playback!=null) openBookmarkDictation();
+            }else{
+                android.widget.Toast.makeText(this,"Microphone permission is needed for dictation.",android.widget.Toast.LENGTH_LONG).show();
+                resumeAfterCapture();
+            }
+            return;
+        }
         if(request==MIC_PERMISSION){
             if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)beginRecording();
             else resumeAfterCapture();
         }
     }
+    private void openBookmarkDictation() {
+        if(dictation!=null || requestingDictationPermission || pendingBookUri==null)return;
+        if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
+            requestingDictationPermission=true;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},DICTATION_PERMISSION);
+            return;
+        }
+        dictation=new BookmarkDictation(this, handler, format(pendingPosition), this::finishBookmarkDictation);
+        dictation.show();
+    }
+
+    private void finishBookmarkDictation(String transcript) {
+        dictation=null;
+        if(!transcript.isEmpty() && pendingBookUri!=null){
+            notes.add(new Note(pendingBookUri,transcript,pendingPosition));
+            saveNotes();
+            android.widget.Toast.makeText(this,"Note saved",android.widget.Toast.LENGTH_SHORT).show();
+            if(tts!=null)tts.speak("Note saved",TextToSpeech.QUEUE_FLUSH,null,"note-saved");
+        }
+        resumeAfterCapture();
+        render();
+    }
+
     private void dictateNote() {
         Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         intent.putExtra(RecognizerIntent.EXTRA_PROMPT,"Speak your audiobook note");
         try { startActivityForResult(intent,DICTATE_NOTE); }
         catch(android.content.ActivityNotFoundException ex) {
-            autoSaveDictation=false;
             new android.app.AlertDialog.Builder(this).setMessage("No speech recognition service is installed. Type your note instead.")
             .setPositiveButton("Type note",(d,w)->typeNote(""))
             .setNegativeButton("Cancel",(d,w)->resumeAfterCapture())
@@ -824,15 +863,7 @@ public class MainActivity extends Activity {
                 ? data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS) : null;
             String transcript=results==null || results.isEmpty() || results.get(0)==null
                 ? "" : results.get(0).trim();
-            if(autoSaveDictation){
-                if(!transcript.isEmpty() && pendingBookUri!=null){
-                    notes.add(new Note(pendingBookUri,transcript,pendingPosition));
-                    saveNotes();
-                    if(tts!=null)tts.speak("Note saved",TextToSpeech.QUEUE_FLUSH,null,"note-saved");
-                }
-                resumeAfterCapture();
-                render();
-            }else if(result==RESULT_OK && pendingBookUri!=null){
+            if(result==RESULT_OK && pendingBookUri!=null){
                 typeNote(transcript);
             }else{
                 resumeAfterCapture();
@@ -1156,5 +1187,13 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume(){super.onResume();refreshLaunchDiagnostics();if(buttonTestTicker!=null&&section.equals("tools"))handler.post(buttonTestTicker);if(updater!=null)updater.onResume();if(prefs!=null){notes.clear();restoreNotes();}}
     @Override protected void onPause(){canStartVoiceNote=false;if(buttonTestTicker!=null)handler.removeCallbacks(buttonTestTicker);super.onPause();saveBooks();}
+    @Override protected void onStop(){
+        if(dictation!=null){
+            dictation.close();
+            dictation=null;
+            if(!isChangingConfigurations()) resumeAfterCapture();
+        }
+        super.onStop();
+    }
     @Override protected void onDestroy(){stopNotePlayer();if(recording)finishRecording(false);if(tts!=null)tts.shutdown();if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
 }
