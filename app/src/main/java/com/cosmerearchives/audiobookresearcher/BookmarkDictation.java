@@ -8,8 +8,7 @@ import android.os.Handler;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
-import android.speech.tts.TextToSpeech;
-import android.speech.tts.UtteranceProgressListener;
+import android.media.MediaPlayer;
 import android.view.View;
 import android.widget.TextView;
 
@@ -24,16 +23,14 @@ final class BookmarkDictation {
     private final AlertDialog dialog;
     private final TextView status;
     private SpeechRecognizer recognizer;
-    private final TextToSpeech speech;
-    private String cueId;
-    private final Runnable cueTimeout = () -> finishCue(true);
+    private MediaPlayer cuePlayer;
+    private final Runnable cueTimeout = this::finishCue;
     private final Runnable timeout = () -> showError("Dictation timed out. Try again.");
 
-    BookmarkDictation(Context context, Handler handler, String timestamp, TextToSpeech speech, Consumer<String> finish) {
+    BookmarkDictation(Context context, Handler handler, String timestamp, Consumer<String> finish) {
         this.context = context;
         this.handler = handler;
         this.finish = finish;
-        this.speech = speech;
         status = new TextView(context);
         int padding = Math.round(24 * context.getResources().getDisplayMetrics().density);
         status.setPadding(padding, padding, padding, padding);
@@ -57,39 +54,38 @@ final class BookmarkDictation {
     private void announceAndListen() {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setVisibility(View.GONE);
         status.setText("Starting microphone…");
-        if (speech == null) {
-            startListening();
-            return;
-        }
-
-        cueId = java.util.UUID.randomUUID().toString();
-        speech.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-            @Override public void onStart(String id) {}
-            @Override public void onDone(String id) { cueFinished(id); }
-            @Override public void onError(String id) { cueFinished(id); }
-
-            private void cueFinished(String id) {
-                handler.post(() -> {
-                    if (id != null && id.equals(cueId)) finishCue(false);
-                });
+        try {
+            cuePlayer = MediaPlayer.create(context, R.raw.begin_dictation);
+            if (cuePlayer == null) {
+                finishCue();
+                return;
             }
-        });
-        handler.postDelayed(cueTimeout, 4000);
-        if (speech.speak("Begin dictation", TextToSpeech.QUEUE_FLUSH, null, cueId)
-                == TextToSpeech.ERROR) finishCue(false);
+            cuePlayer.setOnCompletionListener(player -> {
+                if (cuePlayer == player) finishCue();
+            });
+            cuePlayer.setOnErrorListener((player, what, extra) -> {
+                if (cuePlayer == player) finishCue();
+                return true;
+            });
+            handler.postDelayed(cueTimeout, 3000);
+            cuePlayer.start();
+        } catch (RuntimeException error) {
+            finishCue();
+        }
     }
 
-    private void finishCue(boolean stopSpeech) {
-        clearCue(stopSpeech);
+    private void finishCue() {
+        releaseCue();
         if (dialog.isShowing()) startListening();
     }
 
-    private void clearCue(boolean stopSpeech) {
+    private void releaseCue() {
         handler.removeCallbacks(cueTimeout);
-        if (cueId == null) return;
-        cueId = null;
-        speech.setOnUtteranceProgressListener(null);
-        if (stopSpeech) speech.stop();
+        if (cuePlayer != null) {
+            MediaPlayer player = cuePlayer;
+            cuePlayer = null;
+            player.release();
+        }
     }
 
     private void startListening() {
@@ -166,7 +162,7 @@ final class BookmarkDictation {
     }
 
     void close() {
-        clearCue(true);
+        releaseCue();
         releaseRecognizer();
         dialog.dismiss();
     }

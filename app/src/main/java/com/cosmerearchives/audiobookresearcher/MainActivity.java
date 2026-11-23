@@ -709,7 +709,7 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},DICTATION_PERMISSION);
             return;
         }
-        dictation=new BookmarkDictation(this, handler, format(pendingPosition), tts, this::finishBookmarkDictation);
+        dictation=new BookmarkDictation(this, handler, format(pendingPosition), this::finishBookmarkDictation);
         dictation.show();
     }
 
