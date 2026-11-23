@@ -45,6 +45,7 @@ public class MainActivity extends Activity {
     private String section="library";
     private Runnable buttonTestTicker;
     private TextView lastLaunchDetails;
+    private TextView assistantOverlayDetails;
     private ScrollView libraryScroll;
     private TextView scanRefreshButton;
     private int pendingLibraryScroll=-1;
@@ -312,6 +313,7 @@ public class MainActivity extends Activity {
     }
     private void render() {
         lastLaunchDetails=null;
+        assistantOverlayDetails=null;
         if(notePlayer!=null)stopNotePlayer();
         ScrollView scroll = new ScrollView(this);
         if(section.equals("library"))libraryScroll=scroll;
@@ -493,7 +495,30 @@ public class MainActivity extends Activity {
             lastLaunchDetails=text("",14,false);
             lastLaunchDetails.setTextIsSelectable(true);
             root.addView(lastLaunchDetails);
-            refreshLastLaunch();
+            refreshLaunchDiagnostics();
+            space(root,12);
+            root.addView(text("Assistant overlay test",21,true));
+            root.addView(text("Enable Codex assistant overlay test in Android Accessibility. "
+                +"This records the time and window class for Google and Gemini on this device.",14,false));
+            space(root,8);
+            TextView accessibilitySettings=button("Open Accessibility settings",false);
+            root.addView(accessibilitySettings);
+            accessibilitySettings.setOnClickListener(v->
+                startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+            space(root,8);
+            assistantOverlayDetails=text("",14,false);
+            assistantOverlayDetails.setTextIsSelectable(true);
+            root.addView(assistantOverlayDetails);
+            TextView refreshOverlay=button("Refresh overlay events",false);
+            root.addView(refreshOverlay);
+            refreshOverlay.setOnClickListener(v->refreshLaunchDiagnostics());
+            TextView clearOverlay=button("Clear overlay events",false);
+            root.addView(clearOverlay);
+            clearOverlay.setOnClickListener(v->{
+                prefs.edit().remove(AssistantOverlayDiagnostics.HISTORY).apply();
+                refreshLaunchDiagnostics();
+            });
+            refreshLaunchDiagnostics();
             space(root,12);
             TextView lifecycle=text("Player lifecycle: "+prefs.getString("playerLifecycle","not recorded"),14,true);
             root.addView(lifecycle);space(root,8);
@@ -1090,14 +1115,18 @@ public class MainActivity extends Activity {
             }catch(Exception e){android.util.Log.e("AudiobookLibrary","Cannot save books",e);}
         }
     }
-    private void refreshLastLaunch(){
+    private void refreshLaunchDiagnostics(){
+        if(assistantOverlayDetails!=null){
+            assistantOverlayDetails.setText(prefs.getString(AssistantOverlayDiagnostics.HISTORY,
+                "No Google or Gemini window events recorded yet."));
+        }
         if(lastLaunchDetails!=null){
             lastLaunchDetails.setText(prefs.getString(CodexLauncherActivity.LAST_LAUNCH,
                 "No launch recorded yet. Open Codex from your home screen."));
         }
     }
 
-    @Override protected void onResume(){super.onResume();refreshLastLaunch();if(buttonTestTicker!=null&&section.equals("tools"))handler.post(buttonTestTicker);if(updater!=null)updater.onResume();if(prefs!=null){notes.clear();restoreNotes();}}
+    @Override protected void onResume(){super.onResume();refreshLaunchDiagnostics();if(buttonTestTicker!=null&&section.equals("tools"))handler.post(buttonTestTicker);if(updater!=null)updater.onResume();if(prefs!=null){notes.clear();restoreNotes();}}
     @Override protected void onPause(){canStartVoiceNote=false;if(buttonTestTicker!=null)handler.removeCallbacks(buttonTestTicker);super.onPause();saveBooks();}
     @Override protected void onDestroy(){stopNotePlayer();if(recording)finishRecording(false);if(tts!=null)tts.shutdown();if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
 }

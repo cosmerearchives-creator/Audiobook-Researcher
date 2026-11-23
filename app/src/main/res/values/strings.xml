@@ -2,4 +2,6 @@
 <resources>
     <string name="app_name">Codex</string>
     <string name="dictate_note">Make a note</string>
+    <string name="assistant_diagnostics_name">Codex assistant overlay test</string>
+    <string name="assistant_diagnostics_description">Records timestamps and window class names from the Google and Gemini apps for the Codex overlay test. Stored on this device.</string>
 </resources>
