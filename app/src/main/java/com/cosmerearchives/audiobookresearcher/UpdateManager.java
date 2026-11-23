@@ -148,7 +148,7 @@ final class UpdateManager {
             return;
         }
         DownloadManager.Request request=new DownloadManager.Request(Uri.parse(url));
-        request.setTitle("Audiobook Researcher update");
+        request.setTitle("Codex update");
         request.setDescription("Downloading "+version);
         request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
         request.setMimeType("application/vnd.android.package-archive");

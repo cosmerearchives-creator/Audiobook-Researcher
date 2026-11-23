@@ -8,12 +8,8 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
-import android.media.AudioManager;
 import android.media.MediaMetadataRetriever;
 import android.graphics.BitmapFactory;
-import android.media.AudioDeviceInfo;
-import android.media.AudioDeviceCallback;
-import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
@@ -31,48 +27,9 @@ public class NowPlayingActivity extends Activity {
     private static final int PURPLE=0xFF7F64B7;
     private PlaybackService playback;
     private String displayedUri="";
-    private TextView play,elapsed,remaining,microphone,wakeErrorText;
+    private TextView play,elapsed,remaining;
     private SeekBar seek;
     private boolean dragging;
-    private boolean voiceStartRequested=false;
-    private AudioManager audioManager;
-    private boolean bluetoothConnected=false, bluetoothStartedVoice=false;
-    private final AudioDeviceCallback bluetoothWatcher=new AudioDeviceCallback(){
-        @Override public void onAudioDevicesAdded(AudioDeviceInfo[] devices){handler.post(()->syncBluetooth());}
-        @Override public void onAudioDevicesRemoved(AudioDeviceInfo[] devices){handler.post(()->syncBluetooth());}
-    };
-    private boolean bluetoothOutputConnected(){
-        if(audioManager==null)return false;
-        for(AudioDeviceInfo d:audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)){
-            int t=d.getType();
-            if(t==AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || t==AudioDeviceInfo.TYPE_BLUETOOTH_SCO
-                ||t==AudioDeviceInfo.TYPE_BLE_HEADSET || t==AudioDeviceInfo.TYPE_BLE_SPEAKER)return true;
-        }
-        return false;
-    }
-    private void startBluetoothVoice(){
-        if(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO},300);return;}
-        try{
-            startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));
-            bluetoothStartedVoice=true;
-        }catch(Exception e){android.widget.Toast.makeText(this,"Voice activation unavailable: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
-    }
-    private void syncBluetooth(){
-        boolean current=bluetoothOutputConnected();
-        if(!current){
-            if(bluetoothStartedVoice && HandsFreeService.serviceActive)stopService(new Intent(this,HandsFreeService.class));
-            bluetoothStartedVoice=false;
-            getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("bluetoothManualOff",false).apply();
-        }else if(getSharedPreferences("library",MODE_PRIVATE).getBoolean("bluetoothAutoVoiceEnabled",false)
-            && !HandsFreeService.serviceActive &&
-            getSharedPreferences("library",MODE_PRIVATE).getString("wakeLastError","").isEmpty() &&
-            !getSharedPreferences("library",MODE_PRIVATE).getBoolean("bluetoothManualOff",false)){
-            startBluetoothVoice();
-        }
-        bluetoothConnected=current;
-        refresh();
-    }
-
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable ticker=new Runnable(){public void run(){refresh();handler.postDelayed(this,500);}};
     private int dp(int n){return (int)(getResources().getDisplayMetrics().density*n+.5f);}
@@ -99,7 +56,6 @@ public class NowPlayingActivity extends Activity {
     @Override public void onCreate(Bundle b){super.onCreate(b);
         getWindow().setStatusBarColor(0xFF392E51);
         getWindow().setNavigationBarColor(0xFF392E51);
-        audioManager=(AudioManager)getSystemService(AUDIO_SERVICE);
         playback=PlaybackService.instance;
         if(playback==null||playback.player==null){
             android.widget.Toast.makeText(this,"No audiobook session is loaded",android.widget.Toast.LENGTH_SHORT).show();
@@ -125,7 +81,7 @@ public class NowPlayingActivity extends Activity {
         top.addView(menu,new LinearLayout.LayoutParams(dp(64),dp(64)));
         menu.setOnClickListener(v->{
             final String[] items={"Media Library","Notes","Options","Tools"};
-            new android.app.AlertDialog.Builder(this).setTitle("Audiobook Researcher")
+            new android.app.AlertDialog.Builder(this).setTitle("Codex")
                 .setItems(items,(dialog,which)->{
                     String section=which==0?"library":which==1?"notes":which==2?"options":"tools";
                     startActivity(new Intent(this,MainActivity.class).putExtra("section",section));
@@ -133,32 +89,6 @@ public class NowPlayingActivity extends Activity {
                 }).show();
         });
         View filler=new View(this);top.addView(filler,new LinearLayout.LayoutParams(0,dp(1),1));
-        microphone=label("♩",29,true);microphone.setText("🎙");
-        microphone.setContentDescription("Toggle voice activation");
-        top.addView(microphone,new LinearLayout.LayoutParams(dp(64),dp(64)));
-        microphone.setOnClickListener(v->{
-            noteLifecycle("Mic tapped; player still foreground");
-            if(HandsFreeService.serviceActive && !HandsFreeService.listeningState.startsWith("Error:")){
-                if(bluetoothConnected)getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("bluetoothManualOff",true).apply();
-                bluetoothStartedVoice=false;
-                stopService(new Intent(this,HandsFreeService.class));
-            }
-            else if(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)==android.content.pm.PackageManager.PERMISSION_GRANTED){
-                if(HandsFreeService.serviceActive){
-                    startService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.RELOAD));
-                    handler.postDelayed(this::refresh,350);
-                    return;
-                }
-                try{
-                    getSharedPreferences("library",MODE_PRIVATE).edit().putBoolean("bluetoothManualOff",false).apply();
-                    startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));
-                    bluetoothStartedVoice=false;
-                }
-                catch(Exception e){android.widget.Toast.makeText(this,"Microphone unavailable: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
-            }else requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO},300);
-            voiceStartRequested=true;
-            handler.postDelayed(this::refresh,350);
-        });
         column.addView(top);
         org.json.JSONObject customGroup=BookOrganizer.groupFor(this,playback.uri);
         String displayTitle=customGroup==null?playback.title:customGroup.optString("name",playback.title);
@@ -166,8 +96,6 @@ public class NowPlayingActivity extends Activity {
         column.addView(title,new LinearLayout.LayoutParams(-1,dp(70)));
         TextView chapter=label(customGroup==null?"NOW PLAYING":playback.title,14,false);
         chapter.setTextColor(0xFFDCD2F6);column.addView(chapter);
-        wakeErrorText=label("",12,true);wakeErrorText.setTextColor(0xFFFFD8D5);
-        column.addView(wakeErrorText);
         FrameLayout middle=new FrameLayout(this);
         column.addView(middle,new LinearLayout.LayoutParams(-1,0,1));
         FrameLayout coverButton=new FrameLayout(this);
@@ -260,39 +188,9 @@ public class NowPlayingActivity extends Activity {
         if(p==null||p.player==null){if(play!=null)play.setText("▶");return;}
         if(!displayedUri.equals(p.uri)){displayedUri=p.uri; /* Avoid activity recreation loops during audio transitions. */}
         if(play!=null)play.setText(p.isPlaying()?"❚❚":"▶");
-        if(microphone!=null){
-            String error=getSharedPreferences("library",MODE_PRIVATE).getString("wakeLastError","");
-            if(wakeErrorText!=null){wakeErrorText.setText(error.isEmpty()?"":"Voice activation error: "+error);wakeErrorText.setVisibility(error.isEmpty()?View.GONE:View.VISIBLE);}
-            boolean enabled=HandsFreeService.serviceActive && error.isEmpty() && !HandsFreeService.listeningState.startsWith("Error:");
-            if(enabled)voiceStartRequested=false;
-            microphone.setAlpha(1f);
-            microphone.setText(enabled?"🎙":"🎙");
-            microphone.setContentDescription(enabled?"Voice activation on. Tap to stop.":!error.isEmpty()?"Voice activation error: "+error+". Tap to retry.":"Voice activation off. Tap to start.");
-            microphone.setCompoundDrawablesWithIntrinsicBounds(0,0,0,0);
-            microphone.setForeground(enabled?null:new android.graphics.drawable.Drawable(){
-                private final android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-                @Override public void draw(android.graphics.Canvas canvas){
-                    paint.setColor(0xFFFF3B30);paint.setStrokeWidth(dp(5));paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
-                    float x=getBounds().centerX(),y=getBounds().centerY(),size=dp(17);
-                    canvas.drawLine(x-size,y-size,x+size,y+size,paint);
-                    canvas.drawLine(x-size,y+size,x+size,y-size,paint);
-                }
-                @Override public void setAlpha(int a){paint.setAlpha(a);}
-                @Override public void setColorFilter(android.graphics.ColorFilter filter){paint.setColorFilter(filter);}
-                @Override public int getOpacity(){return android.graphics.PixelFormat.TRANSLUCENT;}
-            });
-        }
         if(elapsed!=null)elapsed.setText(format(p.position()));
         if(remaining!=null)remaining.setText(format(p.duration()));
         if(seek!=null&&!dragging){seek.setMax(Math.max(1,p.duration()));seek.setProgress(p.position());}
-    }
-    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
-        super.onRequestPermissionsResult(request,permissions,results);
-        if(request==300&&results.length>0&&results[0]==android.content.pm.PackageManager.PERMISSION_GRANTED){
-            if(bluetoothConnected)bluetoothStartedVoice=true;
-            try{startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));}
-            catch(Exception e){android.widget.Toast.makeText(this,"Microphone unavailable: "+e.getMessage(),android.widget.Toast.LENGTH_LONG).show();}
-        }
     }
     private void noteLifecycle(String event){
         getSharedPreferences("library",MODE_PRIVATE).edit()
@@ -301,6 +199,6 @@ public class NowPlayingActivity extends Activity {
     }
     @Override protected void onStop(){noteLifecycle("NowPlaying onStop");super.onStop();}
     @Override protected void onDestroy(){noteLifecycle("NowPlaying onDestroy; finishing="+isFinishing());super.onDestroy();}
-    @Override protected void onResume(){noteLifecycle("NowPlaying onResume");super.onResume();if(audioManager!=null)audioManager.registerAudioDeviceCallback(bluetoothWatcher,handler);syncBluetooth();handler.post(ticker);}
-    @Override protected void onPause(){handler.removeCallbacks(ticker);if(audioManager!=null)audioManager.unregisterAudioDeviceCallback(bluetoothWatcher);super.onPause();}
+    @Override protected void onResume(){noteLifecycle("NowPlaying onResume");super.onResume();handler.post(ticker);}
+    @Override protected void onPause(){handler.removeCallbacks(ticker);super.onPause();}
 }

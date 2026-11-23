@@ -20,12 +20,9 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.speech.RecognizerIntent;
-import android.speech.SpeechRecognizer;
-import android.speech.RecognitionListener;
 import android.media.MediaRecorder;
 import android.Manifest;
 import android.content.pm.PackageManager;
-import android.os.SystemClock;
 import android.speech.tts.TextToSpeech;
 import java.io.File;
 import java.util.ArrayList;
@@ -45,8 +42,6 @@ public class MainActivity extends Activity {
     private static final int PICK_COVER_FOLDER = 204;
     private static final int DICTATE_NOTE = 201;
     private static final int MIC_PERMISSION = 202;
-    private static final int WAKE_PERMISSION = 203;
-    private boolean backgroundHandsFree;
     private String section="library";
     private Runnable buttonTestTicker;
     private ScrollView libraryScroll;
@@ -109,23 +104,21 @@ public class MainActivity extends Activity {
             }).show();
     }
 
-    private SpeechRecognizer wakeRecognizer;
-    private boolean wakeEnabled=false;
-    private boolean wakeRunning=false;
-    private TextView wakeToggle;
-    private final Runnable restartWake=()->listenForWake();
     private MediaRecorder recorder;
     private File recordingFile;
-    private long lastVoice, recordingStarted;
-    private boolean heardVoice;
     private android.app.AlertDialog recordingDialog;
-    private TextView recordingStatus;
     private TextToSpeech tts;
     private boolean recording;
     private final ArrayList<Note> notes = new ArrayList<>();
     private String pendingBookUri;
     private int pendingPosition;
     private boolean resumeAfterNote;
+    private boolean voiceNoteRequested;
+    private boolean autoSaveDictation;
+    private boolean canStartVoiceNote;
+
+    static final String ACTION_NOTE = "com.cosmerearchives.audiobookresearcher.DICTATE_BOOKMARK";
+    static final String OPEN_TO_DICTATE = "openToDictate";
     private static final int PURPLE = Color.rgb(105,92,137);
     private static final int INK = Color.rgb(62,60,58);
     private static final int BG = Color.rgb(247,246,242);
@@ -158,11 +151,12 @@ public class MainActivity extends Activity {
                 player=playback.player;
                 for(Book book:books)if(book.uri.equals(playback.uri)){active=book;break;}
                 render();
-                if(launchPlayer){
+                if(launchPlayer && !voiceNoteRequested){
                     getIntent().putExtra("section","library");
                     startActivity(new Intent(MainActivity.this,NowPlayingActivity.class));
                 }
             }
+            startRequestedVoiceNote();
         }
         @Override public void onServiceDisconnected(android.content.ComponentName name){bound=false;playback=null;player=null;}
     };
@@ -195,11 +189,56 @@ public class MainActivity extends Activity {
         if(section==null)section="library";
         restoreBooks();
         restoreNotes();
-        backgroundHandsFree=HandsFreeService.serviceActive;
+        if(state==null){
+            voiceNoteRequested=ACTION_NOTE.equals(getIntent().getAction());
+        }else{
+            voiceNoteRequested=state.getBoolean("voiceNoteRequested");
+            autoSaveDictation=state.getBoolean("autoSaveDictation");
+            pendingBookUri=state.getString("pendingBookUri");
+            pendingPosition=state.getInt("pendingPosition");
+            resumeAfterNote=state.getBoolean("resumeAfterNote");
+        }
         tts=new TextToSpeech(this,result->{});
         render();
         bindService(new Intent(this,PlaybackService.class),serviceConnection,BIND_AUTO_CREATE);
         handler.postDelayed(ticker, 1000);
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if(ACTION_NOTE.equals(intent.getAction()) && pendingBookUri==null){
+            voiceNoteRequested=true;
+        }
+    }
+
+    @Override protected void onPostResume() {
+        super.onPostResume();
+        canStartVoiceNote=true;
+        startRequestedVoiceNote();
+    }
+
+    @Override protected void onSaveInstanceState(Bundle state) {
+        super.onSaveInstanceState(state);
+        state.putBoolean("voiceNoteRequested",voiceNoteRequested);
+        state.putBoolean("autoSaveDictation",autoSaveDictation);
+        state.putString("pendingBookUri",pendingBookUri);
+        state.putInt("pendingPosition",pendingPosition);
+        state.putBoolean("resumeAfterNote",resumeAfterNote);
+    }
+
+    private void startRequestedVoiceNote() {
+        if(!voiceNoteRequested || !canStartVoiceNote || playback==null)return;
+        voiceNoteRequested=false;
+        if(pendingBookUri!=null)return;
+        if(playback.player==null || playback.uri==null){
+            android.widget.Toast.makeText(this,"Open an audiobook before making a note.",android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+        pendingBookUri=playback.uri;
+        pendingPosition=playback.position();
+        resumeAfterNote=playback.pauseForNote();
+        autoSaveDictation=true;
+        dictateNote();
     }
 
     private final Runnable ticker = new Runnable() {
@@ -215,7 +254,6 @@ public class MainActivity extends Activity {
                     if (player.isPlaying()) saveBooks();
                 } catch (IllegalStateException ignored) {}
             }
-            if(recording)monitorRecording();
             handler.postDelayed(this, 1000);
         }
     };
@@ -281,9 +319,9 @@ public class MainActivity extends Activity {
         TextView toPlayer=button("‹  Now Playing",false);
         root.addView(toPlayer);toPlayer.setOnClickListener(v->returnToPlayer());
         space(root,15);
-        TextView heading = text("Audiobook Researcher", 28, true); root.addView(heading);
+        TextView heading = text("Codex", 28, true); root.addView(heading);
         space(root,7);
-        TextView sub = text(section.equals("notes")?"Your bookmarked notes":section.equals("options")?"App & voice activation settings":section.equals("tools")?"Diagnostics and utilities":section.equals("mediaGallery")?"Audiobook folder and artwork settings":"Your listening library",15,false);
+        TextView sub = text(section.equals("notes")?"Your bookmarked notes":section.equals("options")?"App settings":section.equals("tools")?"Diagnostics and utilities":section.equals("mediaGallery")?"Audiobook folder and artwork settings":"Your listening library",15,false);
         sub.setTextColor(0xFF807D77); root.addView(sub);
         space(root,12);
         if(section.equals("library")){
@@ -383,44 +421,19 @@ public class MainActivity extends Activity {
         }
         if(section.equals("options")){
         {
-            android.widget.CheckBox automaticBluetooth=new android.widget.CheckBox(this);
-            automaticBluetooth.setText("Automatically start voice activation when Bluetooth connects (experimental)");
-            automaticBluetooth.setChecked(prefs.getBoolean("bluetoothAutoVoiceEnabled",false));
-            automaticBluetooth.setOnCheckedChangeListener((control,checked)->
-                prefs.edit().putBoolean("bluetoothAutoVoiceEnabled",checked).apply());
-            root.addView(automaticBluetooth);space(root,10);
+            android.widget.CheckBox captureOnOpen=new android.widget.CheckBox(this);
+            captureOnOpen.setText("Start a dictated note when opening Codex during playback");
+            captureOnOpen.setChecked(prefs.getBoolean(OPEN_TO_DICTATE,false));
+            captureOnOpen.setOnCheckedChangeListener((view,checked)->
+                prefs.edit().putBoolean(OPEN_TO_DICTATE,checked).apply());
+            root.addView(captureOnOpen);
+            space(root,10);
             android.widget.CheckBox includeWrapping=new android.widget.CheckBox(this);
             includeWrapping.setText("Include wrapping chapters and sections");
             includeWrapping.setChecked(prefs.getBoolean("includeWrapping",false));
             root.addView(includeWrapping);
             includeWrapping.setOnCheckedChangeListener((view,checked)->prefs.edit().putBoolean("includeWrapping",checked).apply());
             space(root,10);
-            TextView recognitionTest=button("Run wake phrase recognition test",true);
-            root.addView(recognitionTest);
-            recognitionTest.setOnClickListener(v->startActivity(new Intent(this,RecognitionTestActivity.class)));
-            space(root,10);
-            TextView diagnostics=button("Wake detection settings & diagnostics",false);
-            root.addView(diagnostics);
-            diagnostics.setOnClickListener(v->openWakeDiagnostics());
-            space(root,10);
-            TextView phraseTitle=text("Wake phrase",17,true);
-            root.addView(phraseTitle);
-            space(root,5);
-            String phrase=prefs.getString("wakePhrase","Hey Bookmark");
-            TextView phraseButton=button("“"+phrase+"”  •  Edit phrase",false);
-            root.addView(phraseButton);
-            phraseButton.setOnClickListener(v->editWakePhrase());
-            space(root,10);
-            wakeToggle=button(backgroundHandsFree?"Stop hands-free mode":"Start hands-free mode (experimental)",false);
-            root.addView(wakeToggle);
-            wakeToggle.setOnClickListener(v->{
-                if(backgroundHandsFree){
-                    stopService(new Intent(this,HandsFreeService.class));
-                    backgroundHandsFree=false;
-                    prefs.edit().putBoolean("backgroundHandsFree",false).apply();
-                    wakeToggle.setText("Start hands-free mode (experimental)");
-                } else startBackgroundHandsFree();
-            });
             space(root,18);
         }
         }
@@ -475,17 +488,6 @@ public class MainActivity extends Activity {
         if(section.equals("tools")){
             TextView lifecycle=text("Player lifecycle: "+prefs.getString("playerLifecycle","not recorded"),14,true);
             root.addView(lifecycle);space(root,8);
-            TextView startup=text("Voice engine stage: "+prefs.getString("wakeStartupStage","not started"),15,true);
-            root.addView(startup);
-            TextView rawKeyword=text("Last detected keyword: "+prefs.getString("wakeLastRawKeyword","none")+
-                " ("+prefs.getString("wakeLastKeywordMatch","not yet tested")+")",14,false);
-            root.addView(rawKeyword);
-            TextView otherKeywordCount=text("Other keywords detected and ignored: "+
-                prefs.getInt("wakeOtherKeywordDetections",0),14,false);
-            root.addView(otherKeywordCount);space(root,8);
-            TextView lastWake=text("Voice engine error: "+prefs.getString("wakeLastError","none recorded"),13,false);
-            lastWake.setTextIsSelectable(true);
-            root.addView(lastWake);space(root,12);
             TextView crashTitle=text("Startup & crash diagnostics",21,true);
             root.addView(crashTitle);space(root,8);
             TextView crashReport=text(prefs.getString("lastCrashReport","No Java crash recorded yet."),12,false);
@@ -497,7 +499,7 @@ public class MainActivity extends Activity {
             root.addView(copyCrash);
             copyCrash.setOnClickListener(v->{
                 android.content.ClipboardManager clipboard=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
-                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Audiobook Researcher crash",prefs.getString("lastCrashReport","No Java crash recorded.")));
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Codex crash",prefs.getString("lastCrashReport","No Java crash recorded.")));
                 android.widget.Toast.makeText(this,"Crash report copied",android.widget.Toast.LENGTH_SHORT).show();
             });
             space(root,18);
@@ -554,187 +556,8 @@ public class MainActivity extends Activity {
             scroll.post(()->scroll.scrollTo(0,restoreY));
         }
     }
-    private void openWakeDiagnostics(){
-        LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(dp(20),dp(8),dp(20),dp(12));
-        TextView intro=text("Higher sensitivity catches more phrases but may cause false positives.",14,false);layout.addView(intro);
-        space(layout,12);
-        TextView label=text("Sensitivity: "+prefs.getInt("wakeSensitivity",60)+"%",15,true);layout.addView(label);
-        SeekBar sensitivity=new SeekBar(this);sensitivity.setMax(100);
-        sensitivity.setProgress(prefs.getInt("wakeSensitivity",60));layout.addView(sensitivity);
-        sensitivity.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            public void onStartTrackingTouch(SeekBar b){}
-            public void onProgressChanged(SeekBar b,int value,boolean user){label.setText("Sensitivity: "+value+"%");}
-            public void onStopTrackingTouch(SeekBar b){}
-        });
-        space(layout,10);
-        TextView gateLabel=text("Microphone activity diagnostics",14,true);layout.addView(gateLabel);
-
-
-        TextView meter=text("Microphone level: --",14,false);layout.addView(meter);
-        TextView counter=text("Successful detections: "+prefs.getInt("wakeDetections",0),14,false);layout.addView(counter);
-        android.widget.CheckBox test=new android.widget.CheckBox(this);
-        test.setText("Test mode: count wake words without creating notes");
-        test.setChecked(prefs.getBoolean("wakeTestMode",false));layout.addView(test);
-        final Runnable[] refresh=new Runnable[1];
-        refresh[0]=()->{
-            meter.setText("Microphone level: "+prefs.getInt("wakeMicLevel",0)+" / 100");
-            counter.setText("Successful detections: "+prefs.getInt("wakeDetections",0));
-            handler.postDelayed(refresh[0],400);
-        };
-        handler.post(refresh[0]);
-        new android.app.AlertDialog.Builder(this).setTitle("Wake-word diagnostics")
-            .setView(layout)
-            .setPositiveButton("Save",(d,w)->{
-                prefs.edit().putInt("wakeSensitivity",sensitivity.getProgress())
-                    .putBoolean("wakeTestMode",test.isChecked()).apply();
-                handler.removeCallbacks(refresh[0]);
-                if(backgroundHandsFree){
-                    stopService(new Intent(this,HandsFreeService.class));
-                    backgroundHandsFree=false;
-                    prefs.edit().putBoolean("backgroundHandsFree",false).apply();
-                    render();
-                }
-            }).setNegativeButton("Cancel",(d,w)->handler.removeCallbacks(refresh[0]))
-            .setOnCancelListener(d->handler.removeCallbacks(refresh[0])).show();
-    }
-    private void editWakePhrase(){
-        java.util.LinkedHashSet<String> suggestions=new java.util.LinkedHashSet<>();
-        try(java.io.BufferedReader reader=new java.io.BufferedReader(new java.io.InputStreamReader(
-                getAssets().open("sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/keywords.txt")))){
-            String line;
-            while((line=reader.readLine())!=null){
-                line=line.trim();
-                if(line.isEmpty()||line.startsWith("#"))continue;
-                int tag=line.lastIndexOf('@');
-                if(tag<0)continue;
-                String phrase=line.substring(tag+1).trim().replace('_',' ');
-                if(phrase.matches("[A-Za-z]+(?: [A-Za-z]+){0,4}"))suggestions.add(phrase);
-            }
-        }catch(Exception e){android.util.Log.w("WakePhrase","Bundled phrases unavailable",e);}
-        EditText input=new EditText(this);
-        input.setSingleLine(true);
-        input.setHint("Or type a custom wake phrase");
-        input.setText(prefs.getString("wakePhrase","Hey Bookmark"));
-        input.setSelection(input.length());
-        LinearLayout wrapper=new LinearLayout(this);
-        wrapper.setOrientation(LinearLayout.VERTICAL);
-        wrapper.setPadding(dp(20),dp(10),dp(20),0);
-        if(!suggestions.isEmpty()){
-            TextView caption=text("Bundled quick choices (not necessarily more accurate):",14,true);
-            wrapper.addView(caption);
-            TextView choose=button("Choose a bundled phrase  ▾",false);
-            wrapper.addView(choose);
-            String[] options=suggestions.toArray(new String[0]);
-            choose.setOnClickListener(v->new android.app.AlertDialog.Builder(this)
-                .setTitle("Bundled wake phrases")
-                .setItems(options,(dialog,index)->{
-                    input.setText(options[index]);
-                    input.setSelection(input.length());
-                }).show());
-            space(wrapper,10);
-        }
-        wrapper.addView(input);
-        new android.app.AlertDialog.Builder(this)
-            .setTitle("Wake phrase")
-            .setMessage("Choose a bundled phrase or enter your own. Recognition quality can vary; test the phrase before relying on it.")
-            .setView(wrapper)
-            .setPositiveButton("Save",(dialog,which)->{
-                String phrase=input.getText().toString().trim().replaceAll("\\s+"," ");
-                if(!phrase.matches("[A-Za-z]+(?: [A-Za-z]+){0,4}")){
-                    new android.app.AlertDialog.Builder(this)
-                        .setMessage("Use 1–5 English words containing letters only.")
-                        .setPositiveButton("OK",null).show();
-                    return;
-                }
-                prefs.edit().putString("wakePhrase",phrase).apply();
-                if(HandsFreeService.serviceActive){
-                    startService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.RELOAD));
-                }
-                render();
-            })
-            .setNegativeButton("Cancel",null).show();
-    }
-    private void startBackgroundHandsFree(){
-        if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},WAKE_PERMISSION);return;
-        }
-        try{
-            startForegroundService(new Intent(this,HandsFreeService.class).setAction(HandsFreeService.START));
-            backgroundHandsFree=true;
-            prefs.edit().putBoolean("backgroundHandsFree",true).apply();
-            if(wakeToggle!=null)wakeToggle.setText("Stop hands-free mode");
-        }catch(Exception e){
-            new android.app.AlertDialog.Builder(this).setMessage("Unable to start hands-free mode: "+e.getMessage()).setPositiveButton("OK",null).show();
-        }
-    }
-    private void startWake(){
-        if(active==null || player==null)return;
-        if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},WAKE_PERMISSION);return;
-        }
-        if(!SpeechRecognizer.isRecognitionAvailable(this)){
-            new android.app.AlertDialog.Builder(this).setMessage("This device has no available Android speech recognizer.").setPositiveButton("OK",null).show();return;
-        }
-        wakeEnabled=true;
-        if(wakeToggle!=null)wakeToggle.setText("Stop voice activation (experimental)");
-        if(wakeRecognizer==null){
-            wakeRecognizer=SpeechRecognizer.createSpeechRecognizer(this);
-            wakeRecognizer.setRecognitionListener(new RecognitionListener(){
-                @Override public void onReadyForSpeech(Bundle params){}
-                @Override public void onBeginningOfSpeech(){}
-                @Override public void onRmsChanged(float rms){}
-                @Override public void onBufferReceived(byte[] buffer){}
-                @Override public void onEndOfSpeech(){}
-                @Override public void onError(int error){wakeRunning=false; if(error==SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS){stopWake();return;}restartWakeSoon();}
-                @Override public void onResults(Bundle result){
-                    wakeRunning=false;
-                    ArrayList<String> choices=result.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    if(choices!=null)for(String candidate:choices){
-                        if(java.util.Arrays.asList(candidate.toLowerCase(java.util.Locale.ROOT).split("[^a-z]+")).contains("bookmark")){
-                            stopWake();
-                            beginVoiceBookmark();
-                            return;
-                        }
-                    }
-                    restartWakeSoon();
-                }
-                @Override public void onPartialResults(Bundle partial){}
-                @Override public void onEvent(int eventType,Bundle params){}
-            });
-        }
-        listenForWake();
-    }
-    private void listenForWake(){
-        if(!wakeEnabled || wakeRecognizer==null || wakeRunning || recording)return;
-        wakeRunning=true;
-        Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS,true);
-        try{wakeRecognizer.startListening(intent);}catch(Exception ex){wakeRunning=false;restartWakeSoon();}
-    }
-    private void restartWakeSoon(){
-        handler.removeCallbacks(restartWake);
-        if(wakeEnabled)handler.postDelayed(restartWake,1200);
-    }
-    private void stopWake(){
-        wakeEnabled=false;wakeRunning=false;
-        handler.removeCallbacks(restartWake);
-        if(wakeRecognizer!=null){wakeRecognizer.destroy();wakeRecognizer=null;}
-        if(wakeToggle!=null)wakeToggle.setText("Enable voice activation (experimental)");
-    }
-    private void beginVoiceBookmark(){
-        if(active==null || player==null)return;
-        pendingBookUri=active.uri;
-        pendingPosition=player.getCurrentPosition();
-        resumeAfterNote=player.isPlaying();
-        if(resumeAfterNote){if(playback!=null)playback.pause();else player.pause();}
-        if(playButton!=null)playButton.setText("▶  Play");
-        beginRecording();
-    }
     private void startNote() {
-        if(active==null||player==null)return;
-        if(wakeEnabled)stopWake();
+        if(active==null||player==null||pendingBookUri!=null)return;
         pendingBookUri=active.uri;
         pendingPosition=player.getCurrentPosition();
         resumeAfterNote=player.isPlaying();
@@ -764,12 +587,9 @@ public class MainActivity extends Activity {
             recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
             recorder.setOutputFile(recordingFile.getAbsolutePath());
             recorder.prepare();recorder.start();
-            recording=true;heardVoice=false;
-            recordingStarted=SystemClock.elapsedRealtime();
-            lastVoice=recordingStarted;
-            recordingStatus=text("Recording… Speak your note. Silence will save after 4 seconds.",16,false);
+            recording=true;
             recordingDialog=new android.app.AlertDialog.Builder(this).setTitle("Voice bookmark")
-              .setView(recordingStatus)
+              .setMessage("Speak your note, then tap Save note.")
               .setPositiveButton("Save note",(d,w)->finishRecording(true))
               .setNegativeButton("Discard",(d,w)->finishRecording(false))
               .setOnCancelListener(d->finishRecording(false))
@@ -781,16 +601,6 @@ public class MainActivity extends Activity {
             resumeAfterCapture();
             new android.app.AlertDialog.Builder(this).setMessage("Microphone unavailable: "+ex.getMessage()).setPositiveButton("OK",null).show();
         }
-    }
-    private void monitorRecording(){
-        if(recorder==null)return;
-        try{
-            long now=SystemClock.elapsedRealtime();
-            int amplitude=recorder.getMaxAmplitude();
-            if(amplitude>1600){heardVoice=true;lastVoice=now;}
-            if(recordingStatus!=null)recordingStatus.setText("Recording voice note • "+((now-recordingStarted)/1000)+"s\nSave note, or pause speaking for 4 seconds.");
-            if(heardVoice&&now-lastVoice>=4000)finishRecording(true);
-        }catch(Exception ignored){}
     }
     private void finishRecording(boolean save){
         if(!recording)return;
@@ -821,9 +631,6 @@ public class MainActivity extends Activity {
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){
         super.onRequestPermissionsResult(request,permissions,results);
-        if(request==WAKE_PERMISSION){
-            if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)startBackgroundHandsFree();
-        }
         if(request==MIC_PERMISSION){
             if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)beginRecording();
             else resumeAfterCapture();
@@ -835,9 +642,11 @@ public class MainActivity extends Activity {
         intent.putExtra(RecognizerIntent.EXTRA_PROMPT,"Speak your audiobook note");
         try { startActivityForResult(intent,DICTATE_NOTE); }
         catch(android.content.ActivityNotFoundException ex) {
+            autoSaveDictation=false;
             new android.app.AlertDialog.Builder(this).setMessage("No speech recognition service is installed. Type your note instead.")
             .setPositiveButton("Type note",(d,w)->typeNote(""))
-            .setNegativeButton("Cancel",(d,w)->resumeAfterCapture()).show();
+            .setNegativeButton("Cancel",(d,w)->resumeAfterCapture())
+            .setOnCancelListener(d->resumeAfterCapture()).show();
         }
     }
     private void typeNote(String initial) {
@@ -862,11 +671,13 @@ public class MainActivity extends Activity {
             .setOnCancelListener(d->resumeAfterCapture()).show();
     }
     private void resumeAfterCapture() {
-        if(resumeAfterNote && player!=null) {
+        if(resumeAfterNote && player!=null && (playback==null || playback.uri!=null && playback.uri.equals(pendingBookUri))) {
             if(playback!=null)playback.play();else player.start();
             if(playButton!=null)playButton.setText("❚❚  Pause");
         }
         resumeAfterNote=false;
+        pendingBookUri=null;
+        autoSaveDictation=false;
     }
     private void restoreNotes() {
         try {
@@ -949,10 +760,23 @@ public class MainActivity extends Activity {
             return;
         }
         if(request==DICTATE_NOTE) {
-            if(result==RESULT_OK && data!=null) {
-                ArrayList<String> resultText=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-                typeNote(resultText!=null&&!resultText.isEmpty()?resultText.get(0):"");
-            } else resumeAfterCapture();
+            ArrayList<String> results=result==RESULT_OK && data!=null
+                ? data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS) : null;
+            String transcript=results==null || results.isEmpty() || results.get(0)==null
+                ? "" : results.get(0).trim();
+            if(autoSaveDictation){
+                if(!transcript.isEmpty() && pendingBookUri!=null){
+                    notes.add(new Note(pendingBookUri,transcript,pendingPosition));
+                    saveNotes();
+                    if(tts!=null)tts.speak("Note saved",TextToSpeech.QUEUE_FLUSH,null,"note-saved");
+                }
+                resumeAfterCapture();
+                render();
+            }else if(result==RESULT_OK && pendingBookUri!=null){
+                typeNote(transcript);
+            }else{
+                resumeAfterCapture();
+            }
             return;
         }
         if(request!=PICK_AUDIO || result!=RESULT_OK || data==null || data.getData()==null)return;
@@ -1258,6 +1082,6 @@ public class MainActivity extends Activity {
         }
     }
     @Override protected void onResume(){super.onResume();if(buttonTestTicker!=null&&section.equals("tools"))handler.post(buttonTestTicker);if(updater!=null)updater.onResume();if(prefs!=null){notes.clear();restoreNotes();}}
-    @Override protected void onPause(){if(buttonTestTicker!=null)handler.removeCallbacks(buttonTestTicker);stopWake();super.onPause();saveBooks();}
-    @Override protected void onDestroy(){stopNotePlayer();stopWake();if(recording)finishRecording(false);if(tts!=null)tts.shutdown();if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
+    @Override protected void onPause(){canStartVoiceNote=false;if(buttonTestTicker!=null)handler.removeCallbacks(buttonTestTicker);super.onPause();saveBooks();}
+    @Override protected void onDestroy(){stopNotePlayer();if(recording)finishRecording(false);if(tts!=null)tts.shutdown();if(updater!=null)updater.onDestroy();handler.removeCallbacks(ticker);if(bound)unbindService(serviceConnection);super.onDestroy();}
 }

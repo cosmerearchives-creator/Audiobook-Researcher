@@ -152,6 +152,17 @@ public class PlaybackService extends Service {
         audio.requestAudioFocus(focusListener,AudioManager.STREAM_MUSIC,AudioManager.AUDIOFOCUS_GAIN);
         player.start();refresh();
     }
+    boolean wasPlayingBeforeNote() {
+        return isPlaying() || resumeOnFocus;
+    }
+
+    boolean pauseForNote() {
+        boolean shouldResume = wasPlayingBeforeNote();
+        resumeOnFocus = false;
+        pause();
+        return shouldResume;
+    }
+
     void pause(){if(player!=null&&player.isPlaying()){player.pause();storeProgress(false);}refresh();}
     void toggle(){if(isPlaying())pause();else play();}
     private PendingIntent action(String name,int request){
