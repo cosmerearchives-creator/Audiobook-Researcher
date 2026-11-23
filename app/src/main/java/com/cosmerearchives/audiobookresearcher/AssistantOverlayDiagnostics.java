@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService;
 import android.app.Activity;
 import android.content.Context;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.view.accessibility.AccessibilityEvent;
 
@@ -24,23 +25,48 @@ public class AssistantOverlayDiagnostics extends AccessibilityService {
     private static long overlayAt = -1;
     private static boolean overlayConsumed = true;
 
-    static void checkHandoff(Activity activity, Handler handler, BooleanSupplier ready, Runnable startNote) {
+    private static final Handler handoffHandler = new Handler(Looper.getMainLooper());
+    private static Activity foregroundActivity;
+    private static BooleanSupplier readyToDictate;
+    private static Runnable startNote;
+    private static final Runnable checkHandoff = AssistantOverlayDiagnostics::dispatchHandoff;
+
+    static void registerForeground(Activity activity, BooleanSupplier ready, Runnable openDictation) {
+        foregroundActivity = activity;
+        readyToDictate = ready;
+        startNote = openDictation;
+        scheduleHandoff();
+    }
+
+    static void unregisterForeground(Activity activity) {
+        if (foregroundActivity != activity) return;
+        foregroundActivity = null;
+        readyToDictate = null;
+        startNote = null;
+        handoffHandler.removeCallbacks(checkHandoff);
+    }
+
+    private static void scheduleHandoff() {
+        handoffHandler.removeCallbacks(checkHandoff);
+        if (foregroundActivity != null && !overlayConsumed) {
+            handoffHandler.postDelayed(checkHandoff, 250);
+        }
+    }
+
+    private static void dispatchHandoff() {
+        Activity activity = foregroundActivity;
+        if (activity == null || activity.isFinishing() || activity.isDestroyed() || overlayConsumed
+                || SystemClock.uptimeMillis() - overlayAt > OVERLAY_HANDOFF_MS) return;
         if (!activity.getSharedPreferences("library", MODE_PRIVATE)
                 .getBoolean(DICTATE_AFTER_GEMINI, false)) return;
-        handler.postDelayed(new Runnable() {
-            private int checksRemaining = 5;
 
-            @Override public void run() {
-                if (activity.isFinishing() || activity.isDestroyed()
-                        || !activity.getSharedPreferences("library", MODE_PRIVATE)
-                            .getBoolean(DICTATE_AFTER_GEMINI, false)) return;
-                if (activity.hasWindowFocus() && ready.getAsBoolean() && consumeOverlay(activity)) {
-                    startNote.run();
-                } else if (--checksRemaining > 0) {
-                    handler.postDelayed(this, 300);
-                }
-            }
-        }, 300);
+        // The accessibility event can arrive before or after the activity resumes.
+        // Keep checking within the same handoff window until Codex has focus.
+        if (activity.hasWindowFocus() && readyToDictate.getAsBoolean() && consumeOverlay(activity)) {
+            startNote.run();
+        } else {
+            scheduleHandoff();
+        }
     }
 
     private static boolean consumeOverlay(Context context) {
@@ -51,7 +77,7 @@ public class AssistantOverlayDiagnostics extends AccessibilityService {
             return false;
         }
         overlayConsumed = true;
-        recordHandoff(context, "Gemini detected, handing off to Notes");
+        recordHandoff(context, "Gemini detected, opening dictation");
         return true;
     }
 
@@ -81,6 +107,7 @@ public class AssistantOverlayDiagnostics extends AccessibilityService {
                 recordHandoff(this, "Gemini detected, waiting for Codex to regain focus");
             }
             overlayAt = now;
+            scheduleHandoff();
         }
         String history = prefs.getString(HISTORY, "");
         String[] previous = history.isEmpty() ? new String[0] : history.split("\n");
@@ -94,6 +121,7 @@ public class AssistantOverlayDiagnostics extends AccessibilityService {
     @Override public void onDestroy() {
         overlayAt = -1;
         overlayConsumed = true;
+        handoffHandler.removeCallbacks(checkHandoff);
         super.onDestroy();
     }
 

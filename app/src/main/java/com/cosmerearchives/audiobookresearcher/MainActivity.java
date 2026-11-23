@@ -223,16 +223,7 @@ public class MainActivity extends Activity {
         canStartVoiceNote=true;
         startRequestedVoiceNote();
         if(autoSaveDictation && pendingBookUri!=null && playback!=null) openBookmarkDictation();
-        checkForGeminiNote();
-    }
-
-    @Override public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) checkForGeminiNote();
-    }
-
-    private void checkForGeminiNote() {
-        AssistantOverlayDiagnostics.checkHandoff(this, handler,
+        AssistantOverlayDiagnostics.registerForeground(this,
             () -> canStartVoiceNote && playback != null && pendingBookUri == null && !voiceNoteRequested,
             () -> {
                 voiceNoteRequested = true;
@@ -262,8 +253,6 @@ public class MainActivity extends Activity {
         pendingPosition=playback.position();
         resumeAfterNote=playback.pauseForNote();
         autoSaveDictation=true;
-        section="notes";
-        render();
         openBookmarkDictation();
     }
 
@@ -1186,7 +1175,7 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onResume(){super.onResume();refreshLaunchDiagnostics();if(buttonTestTicker!=null&&section.equals("tools"))handler.post(buttonTestTicker);if(updater!=null)updater.onResume();if(prefs!=null){notes.clear();restoreNotes();}}
-    @Override protected void onPause(){canStartVoiceNote=false;if(buttonTestTicker!=null)handler.removeCallbacks(buttonTestTicker);super.onPause();saveBooks();}
+    @Override protected void onPause(){AssistantOverlayDiagnostics.unregisterForeground(this);canStartVoiceNote=false;if(buttonTestTicker!=null)handler.removeCallbacks(buttonTestTicker);super.onPause();saveBooks();}
     @Override protected void onStop(){
         if(dictation!=null){
             dictation.close();

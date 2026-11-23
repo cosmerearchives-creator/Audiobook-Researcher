@@ -192,19 +192,10 @@ public class NowPlayingActivity extends Activity {
         if(remaining!=null)remaining.setText(format(p.duration()));
         if(seek!=null&&!dragging){seek.setMax(Math.max(1,p.duration()));seek.setProgress(p.position());}
     }
-    @Override public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) checkForGeminiNote();
-    }
-
-    private void checkForGeminiNote() {
-        AssistantOverlayDiagnostics.checkHandoff(this, handler, () -> true, () -> {
-            startActivity(new Intent(this, MainActivity.class)
-                .setAction(MainActivity.ACTION_NOTE)
-                .putExtra("section", "notes")
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
-            finish();
-        });
+    private void openGeminiDictation() {
+        startActivity(new Intent(this, MainActivity.class)
+            .setAction(MainActivity.ACTION_NOTE)
+            .putExtra("section", "notes"));
     }
 
     private void noteLifecycle(String event){
@@ -214,6 +205,6 @@ public class NowPlayingActivity extends Activity {
     }
     @Override protected void onStop(){noteLifecycle("NowPlaying onStop");super.onStop();}
     @Override protected void onDestroy(){noteLifecycle("NowPlaying onDestroy; finishing="+isFinishing());super.onDestroy();}
-    @Override protected void onResume(){noteLifecycle("NowPlaying onResume");super.onResume();handler.post(ticker);checkForGeminiNote();}
-    @Override protected void onPause(){handler.removeCallbacks(ticker);super.onPause();}
+    @Override protected void onResume(){noteLifecycle("NowPlaying onResume");super.onResume();handler.post(ticker);AssistantOverlayDiagnostics.registerForeground(this, () -> true, this::openGeminiDictation);}
+    @Override protected void onPause(){AssistantOverlayDiagnostics.unregisterForeground(this);handler.removeCallbacks(ticker);super.onPause();}
 }
