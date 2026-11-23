@@ -407,16 +407,16 @@ public class MainActivity extends Activity {
     private LinearLayout libraryHeader() {
         LinearLayout header=new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(dp(14),dp(9),dp(14),dp(5));
+        header.setPadding(dp(9),dp(7),dp(9),dp(5));
         LinearLayout titleRow=new LinearLayout(this);
         titleRow.setGravity(Gravity.CENTER_VERTICAL);
         ImageView mark=new ImageView(this);
         mark.setImageResource(R.drawable.ic_open_book);
         mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        LinearLayout.LayoutParams markSize=new LinearLayout.LayoutParams(dp(41),dp(41));
+        LinearLayout.LayoutParams markSize=new LinearLayout.LayoutParams(dp(38),dp(38));
         markSize.rightMargin=dp(9);
         titleRow.addView(mark,markSize);
-        titleRow.addView(text("Codex",25,true),new LinearLayout.LayoutParams(0,-2,1));
+        titleRow.addView(text("Codex",24,true),new LinearLayout.LayoutParams(0,-2,1));
         header.addView(titleRow);
         space(header,9);
         LinearLayout tabs=new LinearLayout(this);
@@ -430,14 +430,17 @@ public class MainActivity extends Activity {
             boolean selected=destination.equals(section);
             TextView item=control(labels[index],labels[index],selected,12);
             android.graphics.drawable.Drawable icon=getDrawable(icons[index]).mutate();
-            icon.setBounds(0,0,dp(15),dp(15));
+            icon.setBounds(0,0,dp(14),dp(14));
             icon.setTint(selected?Color.WHITE:INK);
             item.setCompoundDrawables(icon,null,null,null);
             item.setCompoundDrawablePadding(dp(3));
-            item.setPadding(dp(4),0,dp(3),0);
+            item.setPadding(dp(2),0,dp(2),0);
+            item.setSingleLine(true);
+            item.setAutoSizeTextTypeUniformWithConfiguration(9,12,1,android.util.TypedValue.COMPLEX_UNIT_SP);
             item.setGravity(Gravity.CENTER_VERTICAL|Gravity.CENTER_HORIZONTAL);
             if(!selected)item.setBackgroundColor(Color.TRANSPARENT);
-            tabs.addView(item,new LinearLayout.LayoutParams(0,dp(46),"nowPlaying".equals(destination)?1.17f:1));
+            float weight="nowPlaying".equals(destination)||"collections".equals(destination)?1.22f:1f;
+            tabs.addView(item,new LinearLayout.LayoutParams(0,dp(40),weight));
             item.setOnClickListener(v->{openCollection=null;navigate(destination);});
         }
         header.addView(tabs);
@@ -466,11 +469,14 @@ public class MainActivity extends Activity {
 
     private LinearLayout bottomNavigation() {
         LinearLayout nav=new LinearLayout(this);
-        nav.setPadding(dp(8),dp(5),dp(8),dp(6));
-        TextView home=control("▥\nHome","Home",isHomeSection(),14);
-        TextView settings=control("⚙\nSettings","Settings",!isHomeSection(),14);
-        nav.addView(home,new LinearLayout.LayoutParams(0,dp(55),1));
-        nav.addView(settings,new LinearLayout.LayoutParams(0,dp(55),1));
+        nav.setPadding(dp(18),dp(6),dp(18),dp(6));
+        boolean homeSelected=isHomeSection();
+        TextView home=control("▥\nHome","Home",homeSelected,13);
+        TextView settings=control("⚙\nSettings","Settings",!homeSelected,13);
+        home.setBackground(homeSelected?shape(PURPLE,13,0):null);
+        settings.setBackground(homeSelected?null:shape(PURPLE,13,0));
+        nav.addView(home,new LinearLayout.LayoutParams(0,dp(49),1));
+        nav.addView(settings,new LinearLayout.LayoutParams(0,dp(49),1));
         home.setOnClickListener(v->navigate("library"));
         settings.setOnClickListener(v->navigate("options"));
         return nav;
@@ -482,7 +488,7 @@ public class MainActivity extends Activity {
             return;
         }
         if(!full){
-            root.addView(text("Now Playing",22,true));
+            root.addView(text("Now Playing",19,true));
             space(root,8);
         }
         LinearLayout panel=card();
@@ -495,16 +501,16 @@ public class MainActivity extends Activity {
         row.addView(cover(active,full?Math.min(210,getResources().getConfiguration().screenWidthDp-64):76));
         LinearLayout copy=new LinearLayout(this);
         copy.setOrientation(LinearLayout.VERTICAL);
-        copy.setPadding(full?0:dp(12),full?dp(12):0,0,0);
+        copy.setPadding(full?0:dp(10),full?dp(12):0,0,0);
         if(full)copy.setGravity(Gravity.CENTER_HORIZONTAL);
-        playerTitle=text("",full?23:17,true);
+        playerTitle=text("",full?23:15,true);
         if(full)playerTitle.setGravity(Gravity.CENTER);
         copy.addView(playerTitle);
         if(active!=null && !active.artist.isEmpty())copy.addView(text(active.artist,full?16:13,false));
         LibraryEntry current=currentLibraryEntry();
         String partLabel=currentPartLabel(current);
         if(!partLabel.isEmpty())copy.addView(text(partLabel,13,false));
-        progress=text("",13,false);
+        progress=text("",12,false);
         progress.setTextColor(MUTED);
         seek=new SeekBar(this);
         seek.setContentDescription("Audiobook position");
@@ -517,7 +523,7 @@ public class MainActivity extends Activity {
             @Override public void onStartTrackingTouch(SeekBar bar){tracking=true;}
             @Override public void onStopTrackingTouch(SeekBar bar){tracking=false;seekTo(bar.getProgress());}
         });
-        copy.addView(seek,new LinearLayout.LayoutParams(-1,dp(36)));
+        copy.addView(seek,new LinearLayout.LayoutParams(-1,dp(27)));
         copy.addView(progress);
         row.addView(copy,full?new LinearLayout.LayoutParams(-1,-2):new LinearLayout.LayoutParams(0,-2,1));
         panel.addView(row);
@@ -529,12 +535,16 @@ public class MainActivity extends Activity {
         TextView speed=control(formatSpeed(playback.speed()),"Playback speed",false,13);
         TextView queue=control("☰","View queue",false,19);
         playButton=control("▶","Play",true,22);
-        playButton.setBackground(shape(PURPLE,32,0));
-        for(TextView item:new TextView[]{speed,rewind,playButton,forward,queue}){
-            LinearLayout.LayoutParams size=new LinearLayout.LayoutParams(0,dp(48),1);
-            size.setMargins(dp(3),0,dp(3),0);
-            controls.addView(item,size);
-        }
+        rewind.setBackground(null);
+        forward.setBackground(null);
+        speed.setMinimumHeight(0);
+        queue.setMinimumHeight(0);
+        playButton.setBackground(shape(PURPLE,25,0));
+        controls.addView(speed,new LinearLayout.LayoutParams(dp(43),dp(44)));
+        controls.addView(rewind,new LinearLayout.LayoutParams(0,dp(46),1));
+        controls.addView(playButton,new LinearLayout.LayoutParams(dp(50),dp(50)));
+        controls.addView(forward,new LinearLayout.LayoutParams(0,dp(46),1));
+        controls.addView(queue,new LinearLayout.LayoutParams(dp(43),dp(44)));
         rewind.setOnClickListener(v->{seekTo(playback.position()-15000);updateLibraryPlayback();});
         forward.setOnClickListener(v->{seekTo(playback.position()+15000);updateLibraryPlayback();});
         speed.setOnClickListener(v->chooseSpeed(speed));
@@ -542,28 +552,28 @@ public class MainActivity extends Activity {
         playButton.setOnClickListener(v->toggle());
         panel.addView(controls);
         root.addView(panel);
-        space(root,18);
+        space(root,full?18:12);
         if(full)addQueue(root);
     }
 
     private View buildCompactPlayer() {
         LinearLayout panel=new LinearLayout(this);
         panel.setGravity(Gravity.CENTER_VERTICAL);
-        panel.setPadding(dp(12),dp(8),dp(10),dp(8));
+        panel.setPadding(dp(10),dp(6),dp(7),dp(6));
         panel.setBackground(shape(PURPLE,15,0));
-        panel.addView(cover(active,47));
+        panel.addView(cover(active,43));
         compactPartLabel=currentPartLabel(currentLibraryEntry());
         LinearLayout copy=new LinearLayout(this);
         copy.setOrientation(LinearLayout.VERTICAL);
         copy.setPadding(dp(10),0,dp(8),0);
         compactProgress=progressBar(true);
         copy.addView(compactProgress,new LinearLayout.LayoutParams(-1,dp(4)));
-        compactTitle=text("",14,true);
+        compactTitle=text("",13,true);
         compactTitle.setSingleLine(true);
         compactTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
         compactTitle.setTextColor(Color.WHITE);
         copy.addView(compactTitle);
-        compactTime=text("",12,false);
+        compactTime=text("",11,false);
         compactTime.setTextColor(0xFFF1EAF7);
         copy.addView(compactTime);
         panel.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
@@ -571,7 +581,8 @@ public class MainActivity extends Activity {
         compactPlay.setBackground(shape(PURPLE,24,Color.WHITE));
         panel.addView(compactPlay,new LinearLayout.LayoutParams(dp(48),dp(48)));
         compactPlay.setOnClickListener(v->toggle());
-        TextView open=control("⌃","Open full player",true,21);
+        TextView open=control("⌃","Open full player",true,19);
+        open.setBackground(null);
         panel.addView(open,new LinearLayout.LayoutParams(dp(44),dp(48)));
         open.setOnClickListener(v->navigate("nowPlaying"));
         copy.setOnClickListener(v->navigate("nowPlaying"));
@@ -622,21 +633,23 @@ public class MainActivity extends Activity {
         space(root,12);
         }
         if(section.equals("library")){
-        root.setPadding(dp(12),dp(8),dp(12),dp(20));
+        root.setPadding(dp(8),dp(6),dp(8),dp(16));
         addNowPlaying(root,false);
         LinearLayout headingRow=new LinearLayout(this);
         headingRow.setGravity(Gravity.CENTER_VERTICAL);
-        TextView libraryTitle=text("Your Audiobooks",21,true);
+        TextView libraryTitle=text("Your Audiobooks",18,true);
         headingRow.addView(libraryTitle,new LinearLayout.LayoutParams(0,-2,1));
-        TextView sort=control(sortByTitle?"Title ⌄":"Recent ⌄","Sort audiobooks",false,13);
-        headingRow.addView(sort,new LinearLayout.LayoutParams(dp(94),dp(44)));
+        TextView sort=control(sortByTitle?"Title ⌄":"Recent ⌄","Sort audiobooks",false,12);
+        sort.setMinimumHeight(0);
+        headingRow.addView(sort,new LinearLayout.LayoutParams(dp(76),dp(42)));
         sort.setOnClickListener(v->new android.app.AlertDialog.Builder(this).setTitle("Sort audiobooks")
             .setSingleChoiceItems(new String[]{"Recent","Title"},sortByTitle?1:0,(d,w)->{
                 sortByTitle=w==1;d.dismiss();render();
             }).setNegativeButton("Cancel",null).show());
         root.addView(headingRow);
         TextView layout=control(libraryGrid?"▤":"▦",libraryGrid?"Show list":"Show grid",false,17);
-        headingRow.addView(layout,new LinearLayout.LayoutParams(dp(43),dp(44)));
+        layout.setBackground(null);
+        headingRow.addView(layout,new LinearLayout.LayoutParams(dp(42),dp(42)));
         layout.setOnClickListener(v->{libraryGrid=!libraryGrid;render();});
         space(root,8);
         if (books.isEmpty()) {
@@ -1231,7 +1244,7 @@ public class MainActivity extends Activity {
         for(int i=0;i<entries.size();i++){
             LibraryEntry entry=entries.get(i);
             if(!grid){
-                addBookGroup(root,entry.key,entry.name,entry.parts,entry.group!=null,entry.group);
+                addBookGroup(root,entry.name,entry.parts,entry.group);
                 continue;
             }
             if(i%2==0){row=new LinearLayout(this);root.addView(row);space(root,6);}
@@ -1473,46 +1486,49 @@ public class MainActivity extends Activity {
         return recent==null?first:recent;
     }
 
-    private void addBookGroup(LinearLayout root,String key,String name,java.util.ArrayList<Book> parts,boolean manual,org.json.JSONObject group){
-        boolean expanded=prefs.getBoolean("expanded:"+key,false);
+    private void addBookGroup(LinearLayout root,String name,ArrayList<Book> parts,JSONObject group){
         LinearLayout panel=card();
-        LinearLayout header=new LinearLayout(this);
-        header.setGravity(Gravity.CENTER_VERTICAL);
+        panel.setPadding(dp(8),dp(5),dp(4),dp(5));
+        LinearLayout row=new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
         Book resume=resumePart(parts);
-        Book artwork=resume==null?parts.get(0):resume;
-        header.addView(cover(artwork,57));
-        LinearLayout captions=new LinearLayout(this);
-        captions.setOrientation(LinearLayout.VERTICAL);
-        captions.setPadding(dp(10),0,dp(7),0);
-        TextView heading=text(name,16,true);
-        captions.addView(heading);
-        header.addView(captions,new LinearLayout.LayoutParams(0,-2,1));
-        TextView play=control("▶","Play "+name,true,17);
-        play.setBackground(shape(PURPLE,24,0));
-        header.addView(play,new LinearLayout.LayoutParams(dp(46),dp(46)));
+        row.addView(cover(resume==null?parts.get(0):resume,45));
+        TextView title=text(name,15,true);
+        title.setPadding(dp(9),0,dp(4),0);
+        title.setMaxLines(2);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        row.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+
+        TextView play=control("▶","Play "+name,true,15);
+        android.graphics.drawable.InsetDrawable playBackground=new android.graphics.drawable.InsetDrawable(
+            shape(PURPLE,20,0),dp(5));
+        play.setBackground(playBackground);
+        row.addView(play,new LinearLayout.LayoutParams(dp(44),dp(44)));
         play.setEnabled(resume!=null);
-        play.setOnClickListener(v->{if(resume!=null)openBook(resume);});
-        TextView arrow=control(expanded?"⌄":"⋮",(expanded?"Hide":"Show")+" parts for "+name,false,19);
-        LinearLayout.LayoutParams arrowSize=new LinearLayout.LayoutParams(dp(42),dp(46));
-        arrowSize.leftMargin=dp(4);
-        header.addView(arrow,arrowSize);
-        View.OnClickListener expand=v->{
-            pendingLibraryScroll=libraryScroll==null?0:libraryScroll.getScrollY();
-            prefs.edit().putBoolean("expanded:"+key,!expanded).apply();
-            render();
-        };
-        captions.setOnClickListener(expand);
-        arrow.setOnClickListener(expand);
-        panel.addView(header);
-        root.addView(panel);space(root,6);
-        if(!expanded){space(root,12);return;}
-        TextView playAll=button("▶ Play "+name,true);root.addView(playAll);
-        playAll.setOnClickListener(v->{
-            for(Book b:parts)if(!BookOrganizer.isWholeWrapping(this,b.uri)){openBook(b);return;}
-        });
-        if(manual){
+        View.OnClickListener playBook=v->{if(resume!=null)openBook(resume);};
+        title.setOnClickListener(playBook);
+        play.setOnClickListener(playBook);
+
+        TextView more=control("⋮","More options for "+name,false,20);
+        more.setBackground(null);
+        row.addView(more,new LinearLayout.LayoutParams(dp(38),dp(44)));
+        more.setOnClickListener(v->showBookDetails(name,parts,group));
+        panel.addView(row);
+        root.addView(panel);
+        space(root,4);
+    }
+
+    private void showBookDetails(String name,ArrayList<Book> parts,JSONObject group){
+        ScrollView scroll=new ScrollView(this);
+        LinearLayout root=new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(14),dp(8),dp(14),0);
+        scroll.addView(root);
+        android.app.AlertDialog details=new android.app.AlertDialog.Builder(this)
+            .setTitle(name).setView(scroll).setNegativeButton("Close",null).create();
+        if(group!=null){
             TextView edit=button("Edit Book / Arrange Parts",false);root.addView(edit);
-            edit.setOnClickListener(v->editCustomBook(group));
+            edit.setOnClickListener(v->{details.dismiss();editCustomBook(group);});
             TextView ungroup=button("Ungroup book (keep audio and notes)",false);
             root.addView(ungroup);
             ungroup.setOnClickListener(v->new android.app.AlertDialog.Builder(this)
@@ -1526,7 +1542,7 @@ public class MainActivity extends Activity {
                         org.json.JSONObject item=all.optJSONObject(i);
                         if(item!=null&&!item.optString("id").equals(group.optString("id")))kept.put(item);
                     }
-                    BookOrganizer.save(this,kept);render();
+                    BookOrganizer.save(this,kept);details.dismiss();render();
                 }).show());
         }
         for(Book part:parts){
@@ -1538,13 +1554,13 @@ public class MainActivity extends Activity {
             if(BookOrganizer.isWholeWrapping(this,part.uri))detailText+=" • Wrapping (auto-skip)";
             TextView progress=text(detailText,13,false);row.addView(progress);
             root.addView(row);space(root,6);
-            row.setOnClickListener(v->openBook(part));
+            row.setOnClickListener(v->{details.dismiss();openBook(part);});
             TextView wrap=button("Edit wrapping: "+part.title,false);
             root.addView(wrap);
-            wrap.setOnClickListener(v->editWrapping(part));
+            wrap.setOnClickListener(v->{details.dismiss();editWrapping(part);});
             space(root,6);
         }
-        space(root,12);
+        details.show();
     }
     private void editCustomBook(org.json.JSONObject existing){
         org.json.JSONObject group=existing==null?new org.json.JSONObject():existing;
