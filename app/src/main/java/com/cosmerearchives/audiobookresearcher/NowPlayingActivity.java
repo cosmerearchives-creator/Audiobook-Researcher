@@ -194,17 +194,17 @@ public class NowPlayingActivity extends Activity {
     }
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (!hasFocus) return;
-        handler.postDelayed(() -> {
-            if (!isFinishing() && !isDestroyed() && hasWindowFocus()
-                    && AssistantOverlayDiagnostics.consumeOverlay(this)) {
-                startActivity(new Intent(this, MainActivity.class)
-                    .setAction(MainActivity.ACTION_NOTE)
-                    .putExtra("section", "notes")
-                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
-                finish();
-            }
-        }, 350);
+        if (hasFocus) checkForGeminiNote();
+    }
+
+    private void checkForGeminiNote() {
+        AssistantOverlayDiagnostics.checkHandoff(this, handler, () -> true, () -> {
+            startActivity(new Intent(this, MainActivity.class)
+                .setAction(MainActivity.ACTION_NOTE)
+                .putExtra("section", "notes")
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+            finish();
+        });
     }
 
     private void noteLifecycle(String event){
@@ -214,6 +214,6 @@ public class NowPlayingActivity extends Activity {
     }
     @Override protected void onStop(){noteLifecycle("NowPlaying onStop");super.onStop();}
     @Override protected void onDestroy(){noteLifecycle("NowPlaying onDestroy; finishing="+isFinishing());super.onDestroy();}
-    @Override protected void onResume(){noteLifecycle("NowPlaying onResume");super.onResume();handler.post(ticker);}
+    @Override protected void onResume(){noteLifecycle("NowPlaying onResume");super.onResume();handler.post(ticker);checkForGeminiNote();}
     @Override protected void onPause(){handler.removeCallbacks(ticker);super.onPause();}
 }

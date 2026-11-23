@@ -217,18 +217,21 @@ public class MainActivity extends Activity {
         super.onPostResume();
         canStartVoiceNote=true;
         startRequestedVoiceNote();
+        checkForGeminiNote();
     }
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (!hasFocus) return;
-        handler.postDelayed(() -> {
-            if (hasWindowFocus() && canStartVoiceNote && pendingBookUri == null
-                    && AssistantOverlayDiagnostics.consumeOverlay(this)) {
+        if (hasFocus) checkForGeminiNote();
+    }
+
+    private void checkForGeminiNote() {
+        AssistantOverlayDiagnostics.checkHandoff(this, handler,
+            () -> canStartVoiceNote && playback != null && pendingBookUri == null && !voiceNoteRequested,
+            () -> {
                 voiceNoteRequested = true;
                 startRequestedVoiceNote();
-            }
-        }, 350);
+            });
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
@@ -440,7 +443,7 @@ public class MainActivity extends Activity {
         if(section.equals("options")){
         {
             android.widget.CheckBox geminiDictation=new android.widget.CheckBox(this);
-            geminiDictation.setText("Dictate when returning from Gemini during playback");
+            geminiDictation.setText("Dictate when returning from Gemini with a book open");
             geminiDictation.setChecked(prefs.getBoolean(AssistantOverlayDiagnostics.DICTATE_AFTER_GEMINI,false));
             geminiDictation.setOnCheckedChangeListener((view,checked)->
                 prefs.edit().putBoolean(AssistantOverlayDiagnostics.DICTATE_AFTER_GEMINI,checked).apply());
@@ -537,7 +540,8 @@ public class MainActivity extends Activity {
             TextView clearOverlay=button("Clear overlay events",false);
             root.addView(clearOverlay);
             clearOverlay.setOnClickListener(v->{
-                prefs.edit().remove(AssistantOverlayDiagnostics.HISTORY).apply();
+                prefs.edit().remove(AssistantOverlayDiagnostics.HISTORY)
+                    .remove(AssistantOverlayDiagnostics.HANDOFF_STATUS).apply();
                 refreshLaunchDiagnostics();
             });
             refreshLaunchDiagnostics();
@@ -1139,8 +1143,10 @@ public class MainActivity extends Activity {
     }
     private void refreshLaunchDiagnostics(){
         if(assistantOverlayDetails!=null){
-            assistantOverlayDetails.setText(prefs.getString(AssistantOverlayDiagnostics.HISTORY,
-                "No Google or Gemini window events recorded yet."));
+            assistantOverlayDetails.setText(prefs.getString(AssistantOverlayDiagnostics.HANDOFF_STATUS,
+                "No dictation handoff recorded yet.") + "\n\n"
+                + prefs.getString(AssistantOverlayDiagnostics.HISTORY,
+                    "No Google or Gemini window events recorded yet."));
         }
         if(lastLaunchDetails!=null){
             lastLaunchDetails.setText(prefs.getString(CodexLauncherActivity.LAST_LAUNCH,
