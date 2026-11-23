@@ -33,6 +33,7 @@ public class PlaybackService extends Service {
                 org.json.JSONObject item=books.optJSONObject(i);
                 if(item!=null&&uri.equals(item.optString("uri"))){
                     item.put("position",complete?duration():position());
+                    item.put("duration",duration());
                     item.put("started",true);
                     item.put("completed",complete);
                     break;
